@@ -1,0 +1,6 @@
+{
+  "name": "Органайзер",
+  "description": "Android-приложение «Органайзер» для школьного и студенческого расписания на Kotlin, Jetpack Compose, Material 3, Room и Hilt.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
