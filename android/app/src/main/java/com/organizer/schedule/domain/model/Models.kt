@@ -9,8 +9,8 @@ import java.time.LocalTime
  */
 enum class RecurrenceType(val title: String) {
     WEEKLY("Каждую неделю"),
-    EVEN_WEEK("Чётная неделя"),
-    ODD_WEEK("Нечётная неделя"),
+    EVEN_WEEK("Верхняя неделя"),
+    ODD_WEEK("Нижняя неделя"),
     ONCE("Один раз")
 }
 
@@ -18,7 +18,7 @@ enum class RecurrenceType(val title: String) {
  * Тема оформления приложения.
  */
 enum class AppThemeMode(val title: String) {
-    SYSTEM("Системная"),
+    SYSTEM("Система"),
     LIGHT("Светлая"),
     DARK("Тёмная")
 }

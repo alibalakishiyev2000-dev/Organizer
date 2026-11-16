@@ -91,7 +91,7 @@ fun OrganizerNavHost(
 
     val activeDate = scheduleState.weekDays.getOrNull(selectedDayIndex) ?: LocalDate.now()
     val dateFormatter = remember { DateTimeFormatter.ofPattern("d MMMM", Locale("ru")) }
-    val weekParityLabel = if (scheduleState.selectedEvenWeek) "Чётная неделя" else "Нечётная неделя"
+    val weekParityLabel = if (scheduleState.selectedEvenWeek) "Верхняя неделя" else "Нижняя неделя"
 
     val isScheduleTab = currentDestination?.route == OrganizerRoute.SCHEDULE.route || currentDestination == null
 

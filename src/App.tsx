@@ -331,7 +331,7 @@ export function App() {
                             : 'text-slate-600 dark:text-zinc-400'
                         }`}
                       >
-                        Чётная
+                        Верхняя
                       </button>
                       <button
                         type="button"
@@ -342,7 +342,7 @@ export function App() {
                             : 'text-slate-600 dark:text-zinc-400'
                         }`}
                       >
-                        Нечётная
+                        Нижняя
                       </button>
                     </div>
                   </div>

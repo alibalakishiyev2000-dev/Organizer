@@ -297,8 +297,8 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
                   : activeTab === 'settings'
                     ? 'Настройки'
                     : selectedEvenWeek
-                      ? 'Чётная неделя'
-                      : 'Нечётная неделя'}
+                      ? 'Верхняя неделя'
+                      : 'Нижняя неделя'}
               </h2>
               {activeTab === 'schedule' && (
                 <p className="text-xs text-slate-500 dark:text-zinc-400">
@@ -339,11 +339,11 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
                 {[
                   {
                     isEven: true,
-                    label: isCurrentWeekEven ? 'Чётная (текущая)' : 'Чётная неделя',
+                    label: isCurrentWeekEven ? 'Верхняя (текущая)' : 'Верхняя неделя',
                   },
                   {
                     isEven: false,
-                    label: !isCurrentWeekEven ? 'Нечётная (текущая)' : 'Нечётная неделя',
+                    label: !isCurrentWeekEven ? 'Нижняя (текущая)' : 'Нижняя неделя',
                   },
                 ].map(({ isEven, label }) => {
                   const active = selectedEvenWeek === isEven;

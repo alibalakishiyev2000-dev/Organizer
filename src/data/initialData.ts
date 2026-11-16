@@ -118,8 +118,8 @@ export const DYNAMIC_SEEDS: Record<DynamicSeedId, DynamicSeedPalette> = {
 
 export const RECURRENCE_LABELS: Record<RecurrenceType, string> = {
   WEEKLY: 'Каждую неделю',
-  EVEN_WEEK: 'Чётная неделя',
-  ODD_WEEK: 'Нечётная неделя',
+  EVEN_WEEK: 'Верхняя неделя',
+  ODD_WEEK: 'Нижняя неделя',
   ONCE: 'Один раз',
 };
 

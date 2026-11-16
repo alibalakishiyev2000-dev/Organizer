@@ -1,5 +1,8 @@
 package com.organizer.schedule.ui.schedule
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -24,13 +28,13 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -45,9 +49,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.Placeable
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.organizer.schedule.domain.model.Lesson
 import com.organizer.schedule.domain.model.RecurrenceType
@@ -198,35 +202,46 @@ fun LessonEditorSheet(
                 }
             }
 
-            // День недели
+            // День недели (единая строка из 7 равных кнопок без обводки)
             Text("День недели", style = MaterialTheme.typography.labelLarge)
-            ChipWrapGroup(
-                horizontalSpacing = 8.dp,
-                verticalSpacing = 4.dp
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 DayOfWeek.entries.forEach { day ->
                     val label = day.getDisplayName(TextStyle.SHORT, Locale("ru"))
+                        .trimEnd('.')
                         .replaceFirstChar { it.uppercase() }
-                    FilterChip(
+                    EditorSelectablePill(
+                        label = label,
                         selected = selectedDay == day,
                         onClick = { selectedDay = day },
-                        label = { Text(label) }
+                        horizontalPadding = 4.dp,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
 
-            // Повторение
+            // Повторение (сетка 2×2 без обводки)
             Text("Повторение", style = MaterialTheme.typography.labelLarge)
-            ChipWrapGroup(
-                horizontalSpacing = 8.dp,
-                verticalSpacing = 4.dp
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                RecurrenceType.entries.forEach { type ->
-                    FilterChip(
-                        selected = selectedRecurrence == type,
-                        onClick = { selectedRecurrence = type },
-                        label = { Text(type.title) }
-                    )
+                RecurrenceType.entries.chunked(2).forEach { rowTypes ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowTypes.forEach { type ->
+                            EditorSelectablePill(
+                                label = type.title,
+                                selected = selectedRecurrence == type,
+                                onClick = { selectedRecurrence = type },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -369,73 +384,58 @@ private fun MaterialTimePickerDialog(
     )
 }
 
-/**
- * Стабильный контейнер с переносом элементов на следующую строку без зависимости от экспериментального FlowRow.
- */
 @Composable
-private fun ChipWrapGroup(
+private fun EditorSelectablePill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    horizontalSpacing: Dp = 8.dp,
-    verticalSpacing: Dp = 4.dp,
-    content: @Composable () -> Unit
+    horizontalPadding: androidx.compose.ui.unit.Dp = 10.dp
 ) {
-    Layout(
-        modifier = modifier.fillMaxWidth(),
-        content = content
-    ) { measurables, constraints ->
-        val hSpace = horizontalSpacing.roundToPx()
-        val vSpace = verticalSpacing.roundToPx()
-        val maxWidth = constraints.maxWidth
-        val childConstraints = constraints.copy(minWidth = 0, minHeight = 0)
-        val placeables = measurables.map { it.measure(childConstraints) }
-
-        val rows = mutableListOf<List<Placeable>>()
-        var currentRow = mutableListOf<Placeable>()
-        var currentWidth = 0
-
-        placeables.forEach { placeable ->
-            val nextWidth = if (currentRow.isEmpty()) {
-                placeable.width
-            } else {
-                currentWidth + hSpace + placeable.width
-            }
-            if (constraints.hasBoundedWidth && currentRow.isNotEmpty() && nextWidth > maxWidth) {
-                rows.add(currentRow)
-                currentRow = mutableListOf(placeable)
-                currentWidth = placeable.width
-            } else {
-                currentRow.add(placeable)
-                currentWidth = nextWidth
-            }
-        }
-        if (currentRow.isNotEmpty()) {
-            rows.add(currentRow)
-        }
-
-        val totalHeight = if (rows.isEmpty()) {
-            0
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary
         } else {
-            rows.sumOf { row -> row.maxOf { it.height } } + vSpace * (rows.size - 1)
-        }
-        val layoutWidth = if (constraints.hasBoundedWidth) {
-            maxWidth
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        animationSpec = tween(180, easing = FastOutSlowInEasing),
+        label = "editorPillBg"
+    )
+    val fgColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.onPrimary
         } else {
-            rows.maxOfOrNull { row ->
-                row.sumOf { it.width } + hSpace * (row.size - 1).coerceAtLeast(0)
-            } ?: 0
-        }
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = tween(180, easing = FastOutSlowInEasing),
+        label = "editorPillFg"
+    )
+    val shape = RoundedCornerShape(12.dp)
 
-        layout(layoutWidth, totalHeight) {
-            var y = 0
-            rows.forEach { row ->
-                var x = 0
-                val rowHeight = row.maxOf { it.height }
-                row.forEach { placeable ->
-                    placeable.placeRelative(x, y + (rowHeight - placeable.height) / 2)
-                    x += placeable.width + hSpace
-                }
-                y += rowHeight + vSpace
-            }
+    Surface(
+        color = bgColor,
+        shape = shape,
+        modifier = modifier
+            .defaultMinSize(minHeight = 38.dp)
+            .clip(shape)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = horizontalPadding, vertical = 9.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = fgColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

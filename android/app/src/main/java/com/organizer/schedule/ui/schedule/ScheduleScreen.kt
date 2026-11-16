@@ -244,8 +244,8 @@ private fun WeekParitySwitcher(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         val options = listOf(
-            true to if (isCurrentWeekEven) "Чётная (текущая)" else "Чётная неделя",
-            false to if (!isCurrentWeekEven) "Нечётная (текущая)" else "Нечётная неделя"
+            true to if (isCurrentWeekEven) "Верхняя (текущая)" else "Верхняя неделя",
+            false to if (!isCurrentWeekEven) "Нижняя (текущая)" else "Нижняя неделя"
         )
         options.forEach { (isEven, label) ->
             val selected = selectedEvenWeek == isEven

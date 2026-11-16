@@ -4,11 +4,17 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,11 +30,11 @@ import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,8 +46,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.organizer.schedule.domain.model.AppThemeMode
 import com.organizer.schedule.domain.model.ScheduleImportResult
@@ -200,10 +209,10 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         AppThemeMode.entries.forEach { mode ->
-                            FilterChip(
+                            SelectableSettingPill(
+                                label = mode.title,
                                 selected = preferences.themeMode == mode,
                                 onClick = { onThemeModeChange(mode) },
-                                label = { Text(mode.title) },
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -321,13 +330,14 @@ fun SettingsScreen(
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             listOf(5, 10, 15, 30).forEach { mins ->
-                                FilterChip(
+                                SelectableSettingPill(
+                                    label = "$mins мин",
                                     selected = preferences.notificationMinutesBefore == mins,
                                     onClick = { onNotificationSettingsChange(true, mins) },
-                                    label = { Text("$mins мин") }
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
@@ -375,18 +385,18 @@ fun SettingsScreen(
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        FilterChip(
+                        SelectableSettingPill(
+                            label = "Понедельник",
                             selected = preferences.firstDayOfWeek == DayOfWeek.MONDAY,
                             onClick = { onFirstDayOfWeekChange(DayOfWeek.MONDAY) },
-                            label = { Text("Понедельник") },
                             modifier = Modifier.weight(1f)
                         )
-                        FilterChip(
+                        SelectableSettingPill(
+                            label = "Воскресенье",
                             selected = preferences.firstDayOfWeek == DayOfWeek.SUNDAY,
                             onClick = { onFirstDayOfWeekChange(DayOfWeek.SUNDAY) },
-                            label = { Text("Воскресенье") },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -552,5 +562,63 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+}
+
+/**
+ * Безрамочная кнопка выбора опции в стиле симулятора (без внешней обводки и наложения).
+ */
+@Composable
+private fun SelectableSettingPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        animationSpec = tween(200, easing = FastOutSlowInEasing),
+        label = "settingPillBg"
+    )
+    val fgColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = tween(200, easing = FastOutSlowInEasing),
+        label = "settingPillFg"
+    )
+    val shape = RoundedCornerShape(14.dp)
+
+    Surface(
+        color = bgColor,
+        shape = shape,
+        modifier = modifier
+            .defaultMinSize(minHeight = 40.dp)
+            .clip(shape)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = fgColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
