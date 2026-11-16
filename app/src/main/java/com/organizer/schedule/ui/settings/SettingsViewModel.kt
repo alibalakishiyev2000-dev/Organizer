@@ -7,13 +7,16 @@ import com.organizer.schedule.domain.model.ScheduleImportResult
 import com.organizer.schedule.domain.model.UserPreferences
 import com.organizer.schedule.domain.repository.ScheduleRepository
 import com.organizer.schedule.domain.usecase.ExportScheduleToIcsUseCase
+import com.organizer.schedule.domain.usecase.ParsedScheduleBackup
 import com.organizer.schedule.domain.usecase.ScheduleBackupUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import javax.inject.Inject
 
@@ -60,24 +63,35 @@ class SettingsViewModel @Inject constructor(
 
     suspend fun buildScheduleIcsContent(): String {
         val lessons = repository.observeAllLessons().first()
-        return exportScheduleToIcsUseCase(lessons)
+        return withContext(Dispatchers.Default) {
+            exportScheduleToIcsUseCase(lessons)
+        }
     }
 
     suspend fun buildScheduleJsonBackup(): String {
         val lessons = repository.observeAllLessons().first()
         val homework = repository.observeAllHomework().first()
-        return scheduleBackupUseCase.exportToJson(lessons, homework)
+        return withContext(Dispatchers.Default) {
+            scheduleBackupUseCase.exportToJson(lessons, homework)
+        }
     }
 
-    suspend fun importScheduleFromContent(
-        rawContent: String,
-        replaceExisting: Boolean
-    ): ScheduleImportResult {
-        val parsed = scheduleBackupUseCase.parseBackupFile(rawContent)
-        return repository.importSchedule(
-            lessons = parsed.lessons,
-            homework = parsed.homework,
-            replaceExisting = replaceExisting
-        )
+    suspend fun buildBaseScheduleJsonBackup(): String = withContext(Dispatchers.Default) {
+        val (baseLessons, baseHomework) = repository.getBaseScheduleSnapshot()
+        scheduleBackupUseCase.exportToJson(baseLessons, baseHomework)
     }
+
+    suspend fun parseScheduleBackup(rawContent: String): ParsedScheduleBackup =
+        withContext(Dispatchers.Default) {
+            scheduleBackupUseCase.parseBackupFile(rawContent)
+        }
+
+    suspend fun importParsedSchedule(
+        parsed: ParsedScheduleBackup,
+        replaceExisting: Boolean
+    ): ScheduleImportResult = repository.importSchedule(
+        lessons = parsed.lessons,
+        homework = parsed.homework,
+        replaceExisting = replaceExisting
+    )
 }

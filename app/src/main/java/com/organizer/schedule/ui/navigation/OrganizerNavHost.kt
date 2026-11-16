@@ -237,7 +237,9 @@ fun OrganizerNavHost(
                     onFirstDayOfWeekChange = settingsViewModel::setFirstDayOfWeek,
                     onGenerateIcsContent = settingsViewModel::buildScheduleIcsContent,
                     onGenerateJsonBackup = settingsViewModel::buildScheduleJsonBackup,
-                    onImportScheduleContent = settingsViewModel::importScheduleFromContent
+                    onGenerateBaseJsonBackup = settingsViewModel::buildBaseScheduleJsonBackup,
+                    onParseImportBackup = settingsViewModel::parseScheduleBackup,
+                    onImportParsedSchedule = settingsViewModel::importParsedSchedule
                 )
             }
         }

@@ -1,10 +1,10 @@
 package com.organizer.schedule.data.repository
 
 import android.content.Context
+import androidx.room.withTransaction
+import com.organizer.schedule.data.local.OrganizerDatabase
 import com.organizer.schedule.data.local.dao.HomeworkDao
 import com.organizer.schedule.data.local.dao.LessonDao
-import com.organizer.schedule.data.local.entity.HomeworkEntity
-import com.organizer.schedule.data.local.entity.LessonEntity
 import com.organizer.schedule.data.mapper.toDomain
 import com.organizer.schedule.data.mapper.toEntity
 import com.organizer.schedule.data.preferences.UserPreferencesDataStore
@@ -12,13 +12,16 @@ import com.organizer.schedule.domain.model.AppThemeMode
 import com.organizer.schedule.domain.model.HomeworkTask
 import com.organizer.schedule.domain.model.Lesson
 import com.organizer.schedule.domain.model.RecurrenceType
+import com.organizer.schedule.domain.model.ScheduleImportResult
 import com.organizer.schedule.domain.model.SubjectColor
 import com.organizer.schedule.domain.model.UserPreferences
 import com.organizer.schedule.domain.repository.ScheduleRepository
 import com.organizer.schedule.widget.TodayScheduleWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -31,6 +34,7 @@ import javax.inject.Singleton
 @Singleton
 class ScheduleRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val database: OrganizerDatabase,
     private val lessonDao: LessonDao,
     private val homeworkDao: HomeworkDao,
     private val preferencesDataStore: UserPreferencesDataStore
@@ -109,161 +113,205 @@ class ScheduleRepositoryImpl @Inject constructor(
         lessons: List<Lesson>,
         homework: List<HomeworkTask>,
         replaceExisting: Boolean
-    ): com.organizer.schedule.domain.model.ScheduleImportResult {
-        if (replaceExisting) {
-            lessonDao.deleteAll()
+    ): ScheduleImportResult = withContext(Dispatchers.IO) {
+        if (lessons.isEmpty()) {
+            return@withContext ScheduleImportResult(lessonsImported = 0, homeworkImported = 0)
         }
 
-        val idMapping = mutableMapOf<Long, Long>()
-        lessons.forEach { lesson ->
-            val newId = lessonDao.upsert(lesson.copy(id = 0L).toEntity())
-            idMapping[lesson.id] = newId
-        }
+        val importedHomeworkCount = database.withTransaction {
+            if (replaceExisting) {
+                lessonDao.deleteAll()
+            }
 
-        var importedHomeworkCount = 0
-        homework.forEach { task ->
-            val mappedLessonId = idMapping[task.lessonId] ?: return@forEach
-            homeworkDao.upsert(task.copy(id = 0L, lessonId = mappedLessonId).toEntity())
-            importedHomeworkCount++
+            val insertedIds = lessonDao.insertAll(lessons.map { it.copy(id = 0L).toEntity() })
+            val idMapping = mutableMapOf<Long, Long>()
+            lessons.forEachIndexed { index, lesson ->
+                val newId = insertedIds.getOrNull(index) ?: return@forEachIndexed
+                if (!idMapping.containsKey(lesson.id)) {
+                    idMapping[lesson.id] = newId
+                }
+            }
+
+            val mappedHomework = homework.mapNotNull { task ->
+                val mappedLessonId = idMapping[task.lessonId] ?: return@mapNotNull null
+                task.copy(id = 0L, lessonId = mappedLessonId).toEntity()
+            }
+            if (mappedHomework.isNotEmpty()) {
+                homeworkDao.insertAll(mappedHomework)
+            }
+            mappedHomework.size
         }
 
         TodayScheduleWidget.refreshAll(context)
-        return com.organizer.schedule.domain.model.ScheduleImportResult(
+        ScheduleImportResult(
             lessonsImported = lessons.size,
             homeworkImported = importedHomeworkCount
         )
     }
 
+    override fun getBaseScheduleSnapshot(): Pair<List<Lesson>, List<HomeworkTask>> {
+        val today = LocalDate.now()
+        val lessons = buildBaseLessons(today)
+        val homework = buildBaseHomework(today, lessons.map { it.id })
+        return lessons to homework
+    }
+
     /**
      * Заполняет базу примерами уроков и домашних заданий при первом запуске.
      */
-    override suspend fun ensureSeeded() {
-        if (lessonDao.count() > 0) return
+    override suspend fun ensureSeeded() = withContext(Dispatchers.IO) {
+        val seeded = database.withTransaction {
+            if (lessonDao.count() > 0) return@withTransaction false
 
-        val today = LocalDate.now()
-        val sampleLessons = listOf(
-            LessonEntity(
-                subject = "Математический анализ",
-                teacher = "проф. Соколова Е.А.",
-                room = "Ауд. 304",
-                dayOfWeek = DayOfWeek.MONDAY,
-                startTime = LocalTime.of(8, 30),
-                endTime = LocalTime.of(10, 0),
-                colorId = SubjectColor.SKY.id,
-                recurrence = RecurrenceType.WEEKLY,
-                notes = "Лекция по пределам и производным"
-            ),
-            LessonEntity(
-                subject = "Алгоритмы и структуры данных",
-                teacher = "доц. Волков Д.С.",
-                room = "Комп. класс 12",
-                dayOfWeek = DayOfWeek.MONDAY,
-                startTime = LocalTime.of(10, 15),
-                endTime = LocalTime.of(11, 45),
-                colorId = SubjectColor.SAGE.id,
-                recurrence = RecurrenceType.WEEKLY,
-                notes = "Практика на Kotlin: графы и деревья"
-            ),
-            LessonEntity(
-                subject = "Английский язык",
-                teacher = "Морозова А.В.",
-                room = "Каб. 215",
-                dayOfWeek = DayOfWeek.MONDAY,
-                startTime = LocalTime.of(12, 15),
-                endTime = LocalTime.of(13, 45),
-                colorId = SubjectColor.PEACH.id,
-                recurrence = RecurrenceType.EVEN_WEEK
-            ),
-            LessonEntity(
-                subject = "Физика",
-                teacher = "доц. Громов П.Н.",
-                room = "Лаб. 108",
-                dayOfWeek = DayOfWeek.TUESDAY,
-                startTime = LocalTime.of(9, 0),
-                endTime = LocalTime.of(10, 30),
-                colorId = SubjectColor.LAVENDER.id,
-                recurrence = RecurrenceType.WEEKLY,
-                notes = "Лабораторная работа №4"
-            ),
-            LessonEntity(
-                subject = "Базы данных",
-                teacher = "Орлов И.М.",
-                room = "Ауд. 412",
-                dayOfWeek = DayOfWeek.TUESDAY,
-                startTime = LocalTime.of(10, 45),
-                endTime = LocalTime.of(12, 15),
-                colorId = SubjectColor.MINT.id,
-                recurrence = RecurrenceType.ODD_WEEK
-            ),
-            LessonEntity(
-                subject = "История науки",
-                teacher = "проф. Белова Н.К.",
-                room = "Ауд. 201",
-                dayOfWeek = DayOfWeek.WEDNESDAY,
-                startTime = LocalTime.of(8, 30),
-                endTime = LocalTime.of(10, 0),
-                colorId = SubjectColor.SAND.id,
-                recurrence = RecurrenceType.WEEKLY
-            ),
-            LessonEntity(
-                subject = "Мобильная разработка",
-                teacher = "Тихонов А.Р.",
-                room = "Технопарк 5",
-                dayOfWeek = DayOfWeek.THURSDAY,
-                startTime = LocalTime.of(10, 15),
-                endTime = LocalTime.of(11, 45),
-                colorId = SubjectColor.ROSE.id,
-                recurrence = RecurrenceType.WEEKLY,
-                notes = "Jetpack Compose & Material 3"
-            ),
-            LessonEntity(
-                subject = "Линейная алгебра",
-                teacher = "проф. Соколова Е.А.",
-                room = "Ауд. 306",
-                dayOfWeek = DayOfWeek.FRIDAY,
-                startTime = LocalTime.of(9, 0),
-                endTime = LocalTime.of(10, 30),
-                colorId = SubjectColor.LEMON.id,
-                recurrence = RecurrenceType.WEEKLY
-            ),
-            LessonEntity(
-                subject = "Проектный семинар",
-                teacher = "Тихонов А.Р.",
-                room = "Коворкинг 2",
-                dayOfWeek = today.dayOfWeek,
-                startTime = LocalTime.of(14, 0),
-                endTime = LocalTime.of(15, 30),
-                colorId = SubjectColor.SKY.id,
-                recurrence = RecurrenceType.ONCE,
-                specificDate = today,
-                notes = "Разбор архитектуры MVVM + Room"
-            )
+            val today = LocalDate.now()
+            val sampleLessons = buildBaseLessons(today)
+            val ids = lessonDao.insertAll(sampleLessons.map { it.copy(id = 0L).toEntity() })
+            val sampleHomework = buildBaseHomework(today, ids)
+            homeworkDao.insertAll(sampleHomework.map { it.copy(id = 0L).toEntity() })
+            true
+        }
+        if (seeded) {
+            TodayScheduleWidget.refreshAll(context)
+        }
+    }
+
+    private fun buildBaseLessons(today: LocalDate): List<Lesson> = listOf(
+        Lesson(
+            id = 1L,
+            subject = "Математический анализ",
+            teacher = "проф. Соколова Е.А.",
+            room = "Ауд. 304",
+            dayOfWeek = DayOfWeek.MONDAY,
+            startTime = LocalTime.of(8, 30),
+            endTime = LocalTime.of(10, 0),
+            color = SubjectColor.SKY,
+            recurrence = RecurrenceType.WEEKLY,
+            notes = "Лекция по пределам и производным"
+        ),
+        Lesson(
+            id = 2L,
+            subject = "Алгоритмы и структуры данных",
+            teacher = "доц. Волков Д.С.",
+            room = "Комп. класс 12",
+            dayOfWeek = DayOfWeek.MONDAY,
+            startTime = LocalTime.of(10, 15),
+            endTime = LocalTime.of(11, 45),
+            color = SubjectColor.SAGE,
+            recurrence = RecurrenceType.WEEKLY,
+            notes = "Практика на Kotlin: графы и деревья"
+        ),
+        Lesson(
+            id = 3L,
+            subject = "Английский язык",
+            teacher = "Морозова А.В.",
+            room = "Каб. 215",
+            dayOfWeek = DayOfWeek.MONDAY,
+            startTime = LocalTime.of(12, 15),
+            endTime = LocalTime.of(13, 45),
+            color = SubjectColor.PEACH,
+            recurrence = RecurrenceType.EVEN_WEEK
+        ),
+        Lesson(
+            id = 4L,
+            subject = "Физика",
+            teacher = "доц. Громов П.Н.",
+            room = "Лаб. 108",
+            dayOfWeek = DayOfWeek.TUESDAY,
+            startTime = LocalTime.of(9, 0),
+            endTime = LocalTime.of(10, 30),
+            color = SubjectColor.LAVENDER,
+            recurrence = RecurrenceType.WEEKLY,
+            notes = "Лабораторная работа №4"
+        ),
+        Lesson(
+            id = 5L,
+            subject = "Базы данных",
+            teacher = "Орлов И.М.",
+            room = "Ауд. 412",
+            dayOfWeek = DayOfWeek.TUESDAY,
+            startTime = LocalTime.of(10, 45),
+            endTime = LocalTime.of(12, 15),
+            color = SubjectColor.MINT,
+            recurrence = RecurrenceType.ODD_WEEK
+        ),
+        Lesson(
+            id = 6L,
+            subject = "История науки",
+            teacher = "проф. Белова Н.К.",
+            room = "Ауд. 201",
+            dayOfWeek = DayOfWeek.WEDNESDAY,
+            startTime = LocalTime.of(8, 30),
+            endTime = LocalTime.of(10, 0),
+            color = SubjectColor.SAND,
+            recurrence = RecurrenceType.WEEKLY
+        ),
+        Lesson(
+            id = 7L,
+            subject = "Мобильная разработка",
+            teacher = "Тихонов А.Р.",
+            room = "Технопарк 5",
+            dayOfWeek = DayOfWeek.THURSDAY,
+            startTime = LocalTime.of(10, 15),
+            endTime = LocalTime.of(11, 45),
+            color = SubjectColor.ROSE,
+            recurrence = RecurrenceType.WEEKLY,
+            notes = "Jetpack Compose & Material 3"
+        ),
+        Lesson(
+            id = 8L,
+            subject = "Линейная алгебра",
+            teacher = "проф. Соколова Е.А.",
+            room = "Ауд. 306",
+            dayOfWeek = DayOfWeek.FRIDAY,
+            startTime = LocalTime.of(9, 0),
+            endTime = LocalTime.of(10, 30),
+            color = SubjectColor.LEMON,
+            recurrence = RecurrenceType.WEEKLY
+        ),
+        Lesson(
+            id = 9L,
+            subject = "Проектный семинар",
+            teacher = "Тихонов А.Р.",
+            room = "Коворкинг 2",
+            dayOfWeek = today.dayOfWeek,
+            startTime = LocalTime.of(14, 0),
+            endTime = LocalTime.of(15, 30),
+            color = SubjectColor.SKY,
+            recurrence = RecurrenceType.ONCE,
+            specificDate = today,
+            notes = "Разбор архитектуры MVVM + Room"
         )
+    )
 
-        val ids = lessonDao.insertAll(sampleLessons)
-        val sampleHomework = listOf(
-            HomeworkEntity(
+    private fun buildBaseHomework(today: LocalDate, ids: List<Long>): List<HomeworkTask> {
+        if (ids.size < 7) return emptyList()
+        return listOf(
+            HomeworkTask(
+                id = 1L,
                 lessonId = ids[0],
                 title = "Решить №14–18 из сборника Демидовича",
                 description = "Тема: вычисление пределов по правилу Лопиталя",
                 dueDate = today.plusDays(2),
                 isCompleted = false
             ),
-            HomeworkEntity(
+            HomeworkTask(
+                id = 2L,
                 lessonId = ids[1],
                 title = "Реализовать алгоритм Дейкстры",
                 description = "С использованием PriorityQueue, покрыть юнит-тестами",
                 dueDate = today.plusDays(3),
                 isCompleted = false
             ),
-            HomeworkEntity(
+            HomeworkTask(
+                id = 3L,
                 lessonId = ids[3],
                 title = "Оформить отчёт по лабораторной №3",
-                description = "Графики погрешностей в миллиметрах",
+                description = "Графики погрешностей в миллиметровке",
                 dueDate = today.plusDays(1),
                 isCompleted = true
             ),
-            HomeworkEntity(
+            HomeworkTask(
+                id = 4L,
                 lessonId = ids[6],
                 title = "Сверстать экран расписания на Compose",
                 description = "Добавить HorizontalPager и TimePicker",
@@ -271,7 +319,5 @@ class ScheduleRepositoryImpl @Inject constructor(
                 isCompleted = false
             )
         )
-        homeworkDao.insertAll(sampleHomework)
-        TodayScheduleWidget.refreshAll(context)
     }
 }

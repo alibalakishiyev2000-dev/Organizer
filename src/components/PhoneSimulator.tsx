@@ -36,6 +36,8 @@ import {
   addDays,
   buildWeekDates,
   computeCurrentStatus,
+  createInitialHomework,
+  createInitialLessons,
   filterLessonsForDate,
   formatDurationRu,
   formatIsoDate,
@@ -1148,6 +1150,24 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
                     Экспорт (.json)
                   </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const baseLessons = createInitialLessons(today);
+                    const baseHomework = createInitialHomework(today);
+                    const json = exportScheduleToJson(baseLessons, baseHomework);
+                    downloadFile(json, 'organizer_base_schedule.json', 'application/json');
+                    setImportError(null);
+                    setExportNotice(
+                      `Базовое расписание сохранено: уроков ${baseLessons.length}, заданий ${baseHomework.length}`
+                    );
+                    setTimeout(() => setExportNotice(null), 4000);
+                  }}
+                  className="w-full py-2 px-3 rounded-2xl border border-slate-200 dark:border-zinc-700 text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <FileDown className="w-3.5 h-3.5" />
+                  Экспорт базового расписания (.json)
+                </button>
                 <button
                   type="button"
                   onClick={() => {

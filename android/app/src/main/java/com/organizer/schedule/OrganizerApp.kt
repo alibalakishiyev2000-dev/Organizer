@@ -30,14 +30,16 @@ class OrganizerApp : Application() {
         super.onCreate()
         NotificationHelper.createChannel(this)
         appScope.launch {
-            repository.ensureSeeded()
-            val lessons = repository.observeAllLessons().first()
-            val prefs = repository.observePreferences().first()
-            alarmScheduler.rescheduleUpcoming(
-                lessons = lessons,
-                enabled = prefs.notificationsEnabled,
-                minutesBefore = prefs.notificationMinutesBefore
-            )
+            runCatching {
+                repository.ensureSeeded()
+                val lessons = repository.observeAllLessons().first()
+                val prefs = repository.observePreferences().first()
+                alarmScheduler.rescheduleUpcoming(
+                    lessons = lessons,
+                    enabled = prefs.notificationsEnabled,
+                    minutesBefore = prefs.notificationMinutesBefore
+                )
+            }
         }
     }
 }

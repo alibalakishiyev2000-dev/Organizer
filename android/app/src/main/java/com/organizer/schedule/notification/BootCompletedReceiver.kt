@@ -28,13 +28,15 @@ class BootCompletedReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val lessons = repository.observeAllLessons().first()
-                val prefs = repository.observePreferences().first()
-                alarmScheduler.rescheduleUpcoming(
-                    lessons = lessons,
-                    enabled = prefs.notificationsEnabled,
-                    minutesBefore = prefs.notificationMinutesBefore
-                )
+                runCatching {
+                    val lessons = repository.observeAllLessons().first()
+                    val prefs = repository.observePreferences().first()
+                    alarmScheduler.rescheduleUpcoming(
+                        lessons = lessons,
+                        enabled = prefs.notificationsEnabled,
+                        minutesBefore = prefs.notificationMinutesBefore
+                    )
+                }
             } finally {
                 pendingResult.finish()
             }

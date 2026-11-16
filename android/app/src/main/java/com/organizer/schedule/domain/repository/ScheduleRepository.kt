@@ -38,5 +38,7 @@ interface ScheduleRepository {
         replaceExisting: Boolean
     ): ScheduleImportResult
 
+    fun getBaseScheduleSnapshot(): Pair<List<Lesson>, List<HomeworkTask>>
+
     suspend fun ensureSeeded()
 }

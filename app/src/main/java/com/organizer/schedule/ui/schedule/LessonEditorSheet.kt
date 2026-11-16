@@ -7,8 +7,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,6 +45,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.organizer.schedule.domain.model.Lesson
 import com.organizer.schedule.domain.model.RecurrenceType
@@ -61,7 +62,7 @@ import java.util.Locale
 /**
  * Нижний лист добавления и редактирования урока с выбором времени через Material 3 TimePicker.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LessonEditorSheet(
     initialLesson: Lesson?,
@@ -199,9 +200,9 @@ fun LessonEditorSheet(
 
             // День недели
             Text("День недели", style = MaterialTheme.typography.labelLarge)
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ChipWrapGroup(
+                horizontalSpacing = 8.dp,
+                verticalSpacing = 4.dp
             ) {
                 DayOfWeek.entries.forEach { day ->
                     val label = day.getDisplayName(TextStyle.SHORT, Locale("ru"))
@@ -216,9 +217,9 @@ fun LessonEditorSheet(
 
             // Повторение
             Text("Повторение", style = MaterialTheme.typography.labelLarge)
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ChipWrapGroup(
+                horizontalSpacing = 8.dp,
+                verticalSpacing = 4.dp
             ) {
                 RecurrenceType.entries.forEach { type ->
                     FilterChip(
@@ -366,4 +367,75 @@ private fun MaterialTimePickerDialog(
             }
         }
     )
+}
+
+/**
+ * Стабильный контейнер с переносом элементов на следующую строку без зависимости от экспериментального FlowRow.
+ */
+@Composable
+private fun ChipWrapGroup(
+    modifier: Modifier = Modifier,
+    horizontalSpacing: Dp = 8.dp,
+    verticalSpacing: Dp = 4.dp,
+    content: @Composable () -> Unit
+) {
+    Layout(
+        modifier = modifier.fillMaxWidth(),
+        content = content
+    ) { measurables, constraints ->
+        val hSpace = horizontalSpacing.roundToPx()
+        val vSpace = verticalSpacing.roundToPx()
+        val maxWidth = constraints.maxWidth
+        val childConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+        val placeables = measurables.map { it.measure(childConstraints) }
+
+        val rows = mutableListOf<List<Placeable>>()
+        var currentRow = mutableListOf<Placeable>()
+        var currentWidth = 0
+
+        placeables.forEach { placeable ->
+            val nextWidth = if (currentRow.isEmpty()) {
+                placeable.width
+            } else {
+                currentWidth + hSpace + placeable.width
+            }
+            if (constraints.hasBoundedWidth && currentRow.isNotEmpty() && nextWidth > maxWidth) {
+                rows.add(currentRow)
+                currentRow = mutableListOf(placeable)
+                currentWidth = placeable.width
+            } else {
+                currentRow.add(placeable)
+                currentWidth = nextWidth
+            }
+        }
+        if (currentRow.isNotEmpty()) {
+            rows.add(currentRow)
+        }
+
+        val totalHeight = if (rows.isEmpty()) {
+            0
+        } else {
+            rows.sumOf { row -> row.maxOf { it.height } } + vSpace * (rows.size - 1)
+        }
+        val layoutWidth = if (constraints.hasBoundedWidth) {
+            maxWidth
+        } else {
+            rows.maxOfOrNull { row ->
+                row.sumOf { it.width } + hSpace * (row.size - 1).coerceAtLeast(0)
+            } ?: 0
+        }
+
+        layout(layoutWidth, totalHeight) {
+            var y = 0
+            rows.forEach { row ->
+                var x = 0
+                val rowHeight = row.maxOf { it.height }
+                row.forEach { placeable ->
+                    placeable.placeRelative(x, y + (rowHeight - placeable.height) / 2)
+                    x += placeable.width + hSpace
+                }
+                y += rowHeight + vSpace
+            }
+        }
+    }
 }

@@ -62,14 +62,71 @@ export function downloadFile(content: string, filename: string, mimeType: string
 }
 
 export function parseScheduleBackupFile(rawContent: string): ParsedScheduleBackup {
-  const trimmed = rawContent.trim();
+  const trimmed = rawContent.replace(/\uFEFF/g, '').trim();
   if (!trimmed) {
     throw new Error('Файл пуст');
   }
-  if (trimmed.startsWith('BEGIN:VCALENDAR')) {
+  if (/^BEGIN:VCALENDAR/i.test(trimmed)) {
     return parseIcsBackup(trimmed);
   }
   return parseJsonBackup(trimmed);
+}
+
+function safeString(value: unknown, fallback = ''): string {
+  if (typeof value !== 'string') return fallback;
+  return value.toLowerCase() === 'null' ? fallback : value;
+}
+
+function parseDayOfWeek(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.min(7, Math.max(1, Math.trunc(value)));
+  }
+  if (typeof value === 'string') {
+    const clean = value.trim().toUpperCase();
+    const num = Number(clean);
+    if (Number.isFinite(num) && clean !== '') {
+      return Math.min(7, Math.max(1, Math.trunc(num)));
+    }
+    const map: Record<string, number> = {
+      MONDAY: 1,
+      MON: 1,
+      MO: 1,
+      ПН: 1,
+      ПОНЕДЕЛЬНИК: 1,
+      TUESDAY: 2,
+      TUE: 2,
+      TU: 2,
+      ВТ: 2,
+      ВТОРНИК: 2,
+      WEDNESDAY: 3,
+      WED: 3,
+      WE: 3,
+      СР: 3,
+      СРЕДА: 3,
+      THURSDAY: 4,
+      THU: 4,
+      TH: 4,
+      ЧТ: 4,
+      ЧЕТВЕРГ: 4,
+      FRIDAY: 5,
+      FRI: 5,
+      FR: 5,
+      ПТ: 5,
+      ПЯТНИЦА: 5,
+      SATURDAY: 6,
+      SAT: 6,
+      SA: 6,
+      СБ: 6,
+      СУББОТА: 6,
+      SUNDAY: 7,
+      SUN: 7,
+      SU: 7,
+      ВС: 7,
+      ВОСКРЕСЕНЬЕ: 7,
+    };
+    if (map[clean]) return map[clean];
+  }
+  return 1;
 }
 
 function parseJsonBackup(raw: string): ParsedScheduleBackup {
@@ -83,9 +140,13 @@ function parseJsonBackup(raw: string): ParsedScheduleBackup {
   const rootObj = (typeof root === 'object' && root !== null ? root : {}) as Record<string, unknown>;
   const rawLessons = Array.isArray(rootObj.lessons)
     ? rootObj.lessons
-    : Array.isArray(root)
-      ? root
-      : null;
+    : Array.isArray(rootObj.schedule)
+      ? rootObj.schedule
+      : Array.isArray(rootObj.items)
+        ? rootObj.items
+        : Array.isArray(root)
+          ? root
+          : null;
 
   if (!rawLessons) {
     throw new Error('В файле отсутствует список уроков');
@@ -95,34 +156,42 @@ function parseJsonBackup(raw: string): ParsedScheduleBackup {
   rawLessons.forEach((item, index) => {
     if (typeof item !== 'object' || item === null) return;
     const obj = item as Record<string, unknown>;
-    const subject = typeof obj.subject === 'string' ? obj.subject.trim() : '';
+    const subject = safeString(obj.subject).trim();
     if (!subject) return;
 
-    const rawColor = String(obj.colorId ?? obj.color ?? '') as SubjectColorId;
+    const rawColor = safeString(obj.colorId ?? obj.color).trim().toLowerCase() as SubjectColorId;
     const colorId: SubjectColorId = VALID_COLORS.has(rawColor)
       ? rawColor
       : COLOR_CYCLE[index % COLOR_CYCLE.length];
 
-    const rawRecurrence = String(obj.recurrence ?? 'WEEKLY') as RecurrenceType;
+    const rawRecurrence = safeString(obj.recurrence, 'WEEKLY').trim().toUpperCase() as RecurrenceType;
     const recurrence: RecurrenceType = VALID_RECURRENCE.has(rawRecurrence)
       ? rawRecurrence
       : 'WEEKLY';
 
-    const dayRaw = Number(obj.dayOfWeek);
-    const dayOfWeek = Number.isFinite(dayRaw) && dayRaw >= 1 && dayRaw <= 7 ? dayRaw : 1;
+    const dayOfWeek = parseDayOfWeek(obj.dayOfWeek);
+    const startTime = normalizeTime(obj.startTime, '09:00');
+    const endTime = normalizeTime(obj.endTime, '10:30');
+    const rawSpecificDate = safeString(obj.specificDate).trim();
+    const specificDate =
+      /^\d{4}-\d{2}-\d{2}/.test(rawSpecificDate)
+        ? rawSpecificDate.slice(0, 10)
+        : recurrence === 'ONCE'
+          ? new Date().toISOString().slice(0, 10)
+          : undefined;
 
     lessons.push({
-      id: typeof obj.id === 'number' ? obj.id : index + 1,
+      id: typeof obj.id === 'number' && Number.isFinite(obj.id) ? obj.id : index + 1,
       subject,
-      teacher: typeof obj.teacher === 'string' ? obj.teacher : '',
-      room: typeof obj.room === 'string' ? obj.room : '',
+      teacher: safeString(obj.teacher).trim(),
+      room: safeString(obj.room).trim(),
       dayOfWeek,
-      startTime: normalizeTime(obj.startTime, '09:00'),
-      endTime: normalizeTime(obj.endTime, '10:30'),
+      startTime,
+      endTime,
       colorId,
       recurrence,
-      specificDate: typeof obj.specificDate === 'string' ? obj.specificDate : undefined,
-      notes: typeof obj.notes === 'string' ? obj.notes : '',
+      specificDate,
+      notes: safeString(obj.notes).trim(),
     });
   });
 
@@ -135,19 +204,19 @@ function parseJsonBackup(raw: string): ParsedScheduleBackup {
   rawHw.forEach((item, index) => {
     if (typeof item !== 'object' || item === null) return;
     const obj = item as Record<string, unknown>;
-    const title = typeof obj.title === 'string' ? obj.title.trim() : '';
+    const title = safeString(obj.title).trim();
     const lessonId = Number(obj.lessonId);
     if (!title || !Number.isFinite(lessonId)) return;
 
+    const rawDue = safeString(obj.dueDate).trim();
     homework.push({
-      id: typeof obj.id === 'number' ? obj.id : index + 1,
+      id: typeof obj.id === 'number' && Number.isFinite(obj.id) ? obj.id : index + 1,
       lessonId,
       title,
-      description: typeof obj.description === 'string' ? obj.description : '',
-      dueDate:
-        typeof obj.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(obj.dueDate)
-          ? obj.dueDate
-          : new Date().toISOString().slice(0, 10),
+      description: safeString(obj.description).trim(),
+      dueDate: /^\d{4}-\d{2}-\d{2}/.test(rawDue)
+        ? rawDue.slice(0, 10)
+        : new Date().toISOString().slice(0, 10),
       isCompleted: Boolean(obj.isCompleted),
     });
   });
@@ -311,8 +380,13 @@ function getIsoWeek(date: Date): number {
 }
 
 function normalizeTime(val: unknown, fallback: string): string {
-  if (typeof val === 'string' && /^\d{2}:\d{2}/.test(val)) {
-    return val.slice(0, 5);
+  if (typeof val === 'string') {
+    const match = val.trim().match(/^(\d{1,2}):(\d{2})/);
+    if (match) {
+      const h = Math.min(23, Math.max(0, Number(match[1])));
+      const m = Math.min(59, Math.max(0, Number(match[2])));
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
   }
   return fallback;
 }

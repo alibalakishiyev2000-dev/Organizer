@@ -46,12 +46,15 @@ import androidx.compose.ui.unit.dp
 import com.organizer.schedule.domain.model.AppThemeMode
 import com.organizer.schedule.domain.model.ScheduleImportResult
 import com.organizer.schedule.domain.model.UserPreferences
+import com.organizer.schedule.domain.usecase.ParsedScheduleBackup
 import com.organizer.schedule.notification.NotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import kotlin.math.roundToInt
+
+private const val MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024
 
 /**
  * Экран настроек: тема оформления (DayNight + OLED), системный шрифт, 120 Гц, уведомления и импорт/экспорт расписания.
@@ -67,12 +70,15 @@ fun SettingsScreen(
     onFirstDayOfWeekChange: (DayOfWeek) -> Unit,
     onGenerateIcsContent: suspend () -> String,
     onGenerateJsonBackup: suspend () -> String,
-    onImportScheduleContent: suspend (String, Boolean) -> ScheduleImportResult,
+    onGenerateBaseJsonBackup: suspend () -> String,
+    onParseImportBackup: suspend (String) -> ParsedScheduleBackup,
+    onImportParsedSchedule: suspend (ParsedScheduleBackup, Boolean) -> ScheduleImportResult,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var pendingImportContent by remember { mutableStateOf<String?>(null) }
+    var pendingImportBackup by remember { mutableStateOf<ParsedScheduleBackup?>(null) }
+    var isImporting by remember { mutableStateOf(false) }
 
     // Экспорт в .ics для Google Календаря
     val exportIcsLauncher = rememberLauncherForActivityResult(
@@ -120,25 +126,53 @@ fun SettingsScreen(
         }
     }
 
-    // Импорт файла расписания (.json или .ics)
+    // Экспорт базового стартового расписания в .json
+    val exportBaseJsonLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            val result = runCatching {
+                val jsonContent = onGenerateBaseJsonBackup()
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { stream ->
+                        stream.write(jsonContent.toByteArray(Charsets.UTF_8))
+                    } ?: error("Не удалось открыть поток записи")
+                }
+            }
+            val message = if (result.isSuccess) {
+                "Базовое расписание сохранено (.json)"
+            } else {
+                "Ошибка сохранения: ${result.exceptionOrNull()?.localizedMessage}"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Импорт файла расписания (.json или .ics) с проверкой на фоновом потоке
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         coroutineScope.launch {
-            val readResult = runCatching {
-                withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)
-                        ?.use { it.readText() }
-                        ?: error("Не удалось прочитать файл")
+            val parseResult = runCatching {
+                val text = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        val bytes = input.readNBytes(MAX_IMPORT_FILE_BYTES + 1)
+                        if (bytes.size > MAX_IMPORT_FILE_BYTES) {
+                            error("Файл слишком большой (максимум 5 МБ)")
+                        }
+                        bytes.toString(Charsets.UTF_8)
+                    } ?: error("Не удалось прочитать файл")
                 }
+                onParseImportBackup(text)
             }
-            readResult.onSuccess { text ->
-                pendingImportContent = text
+            parseResult.onSuccess { parsed ->
+                pendingImportBackup = parsed
             }.onFailure { err ->
                 Toast.makeText(
                     context,
-                    "Ошибка чтения файла: ${err.localizedMessage}",
+                    err.localizedMessage ?: "Не удалось распознать файл расписания",
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -411,6 +445,19 @@ fun SettingsScreen(
                         }
                     }
                     OutlinedButton(
+                        onClick = { exportBaseJsonLauncher.launch("organizer_base_schedule.json") },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.FileDownload,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Экспорт базового расписания (.json)")
+                    }
+                    OutlinedButton(
                         onClick = { exportIcsLauncher.launch("organizer_schedule.ics") },
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -440,19 +487,27 @@ fun SettingsScreen(
         }
     }
 
-    pendingImportContent?.let { content ->
+    pendingImportBackup?.let { parsed ->
+        val summaryText = buildString {
+            append("Найдено уроков: ${parsed.lessons.size}")
+            if (parsed.homework.isNotEmpty()) {
+                append(", заданий: ${parsed.homework.size}")
+            }
+            append(". Заменить текущее расписание новыми уроками или добавить их к существующим?")
+        }
         AlertDialog(
-            onDismissRequest = { pendingImportContent = null },
+            onDismissRequest = { if (!isImporting) pendingImportBackup = null },
             title = { Text("Импорт расписания") },
-            text = {
-                Text("Заменить текущее расписание новыми уроками или добавить их к существующим?")
-            },
+            text = { Text(summaryText) },
             confirmButton = {
                 Button(
+                    enabled = !isImporting,
                     onClick = {
-                        pendingImportContent = null
+                        isImporting = true
+                        pendingImportBackup = null
                         coroutineScope.launch {
-                            val result = runCatching { onImportScheduleContent(content, true) }
+                            val result = runCatching { onImportParsedSchedule(parsed, true) }
+                            isImporting = false
                             val msg = result.fold(
                                 onSuccess = {
                                     "Заменено: уроков ${it.lessonsImported}, заданий ${it.homeworkImported}"
@@ -468,14 +523,20 @@ fun SettingsScreen(
             },
             dismissButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { pendingImportContent = null }) {
+                    TextButton(
+                        enabled = !isImporting,
+                        onClick = { pendingImportBackup = null }
+                    ) {
                         Text("Отмена")
                     }
                     TextButton(
+                        enabled = !isImporting,
                         onClick = {
-                            pendingImportContent = null
+                            isImporting = true
+                            pendingImportBackup = null
                             coroutineScope.launch {
-                                val result = runCatching { onImportScheduleContent(content, false) }
+                                val result = runCatching { onImportParsedSchedule(parsed, false) }
+                                isImporting = false
                                 val msg = result.fold(
                                     onSuccess = {
                                         "Добавлено: уроков ${it.lessonsImported}, заданий ${it.homeworkImported}"

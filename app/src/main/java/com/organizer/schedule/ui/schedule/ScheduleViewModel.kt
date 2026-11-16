@@ -61,7 +61,7 @@ class ScheduleViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            repository.ensureSeeded()
+            runCatching { repository.ensureSeeded() }
         }
         // Перепланируем уведомления при любом изменении расписания или настроек
         viewModelScope.launch {
@@ -70,11 +70,13 @@ class ScheduleViewModel @Inject constructor(
                 repository.observePreferences()
             ) { lessons, prefs -> lessons to prefs }
                 .collect { (lessons, prefs) ->
-                    alarmScheduler.rescheduleUpcoming(
-                        lessons = lessons,
-                        enabled = prefs.notificationsEnabled,
-                        minutesBefore = prefs.notificationMinutesBefore
-                    )
+                    runCatching {
+                        alarmScheduler.rescheduleUpcoming(
+                            lessons = lessons,
+                            enabled = prefs.notificationsEnabled,
+                            minutesBefore = prefs.notificationMinutesBefore
+                        )
+                    }
                 }
         }
     }
