@@ -395,7 +395,7 @@ export function App() {
                 Инструкция по запуску в Android Studio
               </h1>
               <p className="text-sm text-slate-600 dark:text-zinc-400 mt-1">
-                Пошаговая сборка проекта «Органайзер» (minSdk 26 · targetSdk 35 · Kotlin 2.1 · KSP)
+                Пошаговая сборка проекта «Органайзер» (minSdk 26 · targetSdk 35 · Kotlin 2.0.21 · KSP)
               </p>
             </div>
 
@@ -436,6 +436,18 @@ export function App() {
                   <code className="font-mono text-xs">POST_NOTIFICATIONS</code> при первом входе.
                   Для добавления виджета зажмите свободное место на рабочем столе → «Виджеты» →
                   «Органайзер» → «Уроки на сегодня».
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <h2 className="text-base font-semibold">05. Автоматическая сборка APK в GitHub</h2>
+                <p className="text-slate-600 dark:text-zinc-400">
+                  В репозитории добавлен workflow{' '}
+                  <code className="font-mono text-xs">.github/workflows/build-apk.yml</code>. После
+                  экспорта изменений на GitHub он автоматически соберёт{' '}
+                  <code className="font-mono text-xs">apk/Organizer-debug.apk</code> и сохранит его
+                  в папку <code className="font-mono text-xs">apk/</code> (а также в артефакты
+                  Actions).
                 </p>
               </div>
             </div>
