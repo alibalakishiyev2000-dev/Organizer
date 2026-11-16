@@ -5,7 +5,11 @@ on:
     branches:
       - main
     paths:
-      - "android/**"
+      - "app/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle/**"
+      - "gradle.properties"
       - ".github/workflows/build-apk.yml"
   workflow_dispatch:
 
@@ -26,25 +30,16 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Generate Gradle Wrapper if missing
-        working-directory: android
-        run: |
-          if [ ! -f "./gradlew" ]; then
-            gradle wrapper --gradle-version 8.9
-          fi
-          chmod +x ./gradlew
-
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build Debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon
 
       - name: Copy APK to repository folder
         run: |
           mkdir -p apk
-          cp android/app/build/outputs/apk/debug/app-debug.apk apk/Organizer-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk apk/Organizer-debug.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
