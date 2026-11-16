@@ -29,6 +29,8 @@ class UserPreferencesDataStore @Inject constructor(
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val USE_SYSTEM_FONT = booleanPreferencesKey("use_system_font")
+        val HIGH_REFRESH_RATE = booleanPreferencesKey("high_refresh_rate")
         val NOTIFICATION_ENABLED = booleanPreferencesKey("notification_enabled")
         val NOTIFICATION_MINUTES = intPreferencesKey("notification_minutes")
         val FIRST_DAY_OF_WEEK = intPreferencesKey("first_day_of_week")
@@ -41,6 +43,8 @@ class UserPreferencesDataStore @Inject constructor(
             themeMode = runCatching { AppThemeMode.valueOf(themeName) }
                 .getOrDefault(AppThemeMode.SYSTEM),
             dynamicColor = prefs[Keys.DYNAMIC_COLOR] ?: true,
+            useSystemFont = prefs[Keys.USE_SYSTEM_FONT] ?: true,
+            highRefreshRate = prefs[Keys.HIGH_REFRESH_RATE] ?: true,
             notificationsEnabled = prefs[Keys.NOTIFICATION_ENABLED] ?: true,
             notificationMinutesBefore = prefs[Keys.NOTIFICATION_MINUTES] ?: 15,
             firstDayOfWeek = DayOfWeek.of(firstDayValue)
@@ -53,6 +57,14 @@ class UserPreferencesDataStore @Inject constructor(
 
     suspend fun setDynamicColor(enabled: Boolean) {
         context.dataStore.edit { it[Keys.DYNAMIC_COLOR] = enabled }
+    }
+
+    suspend fun setUseSystemFont(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.USE_SYSTEM_FONT] = enabled }
+    }
+
+    suspend fun setHighRefreshRate(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.HIGH_REFRESH_RATE] = enabled }
     }
 
     suspend fun setNotificationSettings(enabled: Boolean, minutesBefore: Int) {

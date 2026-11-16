@@ -1,5 +1,14 @@
 package com.organizer.schedule.ui.navigation
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -59,7 +68,7 @@ private enum class OrganizerRoute(
 }
 
 /**
- * Корневая навигация приложения: верхняя панель, нижнее меню, FAB «+» и модальный редактор уроков.
+ * Корневая навигация приложения: верхняя панель, нижнее меню с плавными переходами, FAB «+» и редактор уроков.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,7 +138,17 @@ fun OrganizerNavHost(
             )
         },
         floatingActionButton = {
-            if (isScheduleTab) {
+            AnimatedVisibility(
+                visible = isScheduleTab,
+                enter = scaleIn(
+                    initialScale = 0.85f,
+                    animationSpec = tween(220, easing = FastOutSlowInEasing)
+                ) + fadeIn(tween(180)),
+                exit = scaleOut(
+                    targetScale = 0.85f,
+                    animationSpec = tween(160)
+                ) + fadeOut(tween(140))
+            ) {
                 FloatingActionButton(
                     onClick = {
                         editingLesson = null
@@ -165,7 +184,25 @@ fun OrganizerNavHost(
         NavHost(
             navController = navController,
             startDestination = OrganizerRoute.SCHEDULE.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = {
+                fadeIn(tween(260, easing = FastOutSlowInEasing)) +
+                    slideInHorizontally(tween(260, easing = FastOutSlowInEasing)) { it / 16 } +
+                    scaleIn(initialScale = 0.98f, animationSpec = tween(260, easing = FastOutSlowInEasing))
+            },
+            exitTransition = {
+                fadeOut(tween(180, easing = FastOutSlowInEasing)) +
+                    slideOutHorizontally(tween(200, easing = FastOutSlowInEasing)) { -it / 16 }
+            },
+            popEnterTransition = {
+                fadeIn(tween(260, easing = FastOutSlowInEasing)) +
+                    slideInHorizontally(tween(260, easing = FastOutSlowInEasing)) { -it / 16 } +
+                    scaleIn(initialScale = 0.98f, animationSpec = tween(260, easing = FastOutSlowInEasing))
+            },
+            popExitTransition = {
+                fadeOut(tween(180, easing = FastOutSlowInEasing)) +
+                    slideOutHorizontally(tween(200, easing = FastOutSlowInEasing)) { it / 16 }
+            }
         ) {
             composable(OrganizerRoute.SCHEDULE.route) {
                 ScheduleScreen(
@@ -194,9 +231,13 @@ fun OrganizerNavHost(
                     preferences = preferences,
                     onThemeModeChange = settingsViewModel::setThemeMode,
                     onDynamicColorChange = settingsViewModel::setDynamicColor,
+                    onUseSystemFontChange = settingsViewModel::setUseSystemFont,
+                    onHighRefreshRateChange = settingsViewModel::setHighRefreshRate,
                     onNotificationSettingsChange = settingsViewModel::setNotificationSettings,
                     onFirstDayOfWeekChange = settingsViewModel::setFirstDayOfWeek,
-                    onGenerateIcsContent = settingsViewModel::buildScheduleIcsContent
+                    onGenerateIcsContent = settingsViewModel::buildScheduleIcsContent,
+                    onGenerateJsonBackup = settingsViewModel::buildScheduleJsonBackup,
+                    onImportScheduleContent = settingsViewModel::importScheduleFromContent
                 )
             }
         }

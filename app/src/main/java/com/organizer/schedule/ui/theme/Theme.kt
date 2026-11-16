@@ -60,6 +60,7 @@ private val OledDarkColorScheme = darkColorScheme(
 fun OrganizerTheme(
     themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     dynamicColor: Boolean = true,
+    useSystemFont: Boolean = true,
     content: @Composable () -> Unit
 ) {
     // Автоматически отслеживает системную тему DayNight при выборе AppThemeMode.SYSTEM
@@ -101,7 +102,7 @@ fun OrganizerTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = OrganizerTypography,
+        typography = organizerTypography(useSystemFont = useSystemFont),
         content = content
     )
 }

@@ -49,6 +49,8 @@ export interface UserPreferences {
   themeMode: AppThemeMode;
   dynamicColor: boolean;
   dynamicSeed: DynamicSeedId;
+  useSystemFont: boolean;
+  highRefreshRate: boolean;
   notificationsEnabled: boolean;
   notificationMinutesBefore: number;
   firstDayOfWeek: 1 | 7; // 1 = Пн, 7 = Вс

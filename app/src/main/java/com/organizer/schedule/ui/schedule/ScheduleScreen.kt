@@ -1,7 +1,13 @@
 package com.organizer.schedule.ui.schedule
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -64,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,6 +84,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlin.math.absoluteValue
 
 /**
  * Экран недельного расписания с горизонтальным свайпом Пн–Вс, поиском и живым статусом урока.
@@ -142,28 +150,44 @@ fun ScheduleScreen(
             )
         }
 
-        // Полоса дней недели Пн–Вс с подсветкой сегодняшнего дня
+        // Полоса дней недели Пн–Вс с подсветкой сегодняшнего дня и плавным переключением
         WeekDaySelectorRow(
             weekDays = weekDays,
             today = uiState.today,
             selectedIndex = pagerState.currentPage,
             onSelectDay = { index ->
-                coroutineScope.launch { pagerState.animateScrollToPage(index) }
+                coroutineScope.launch {
+                    pagerState.animateScrollToPage(
+                        page = index,
+                        animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+                    )
+                }
             }
         )
 
-        // Горизонтальный свайп по дням недели
+        // Горизонтальный свайп по дням недели с плавным масштабом и прозрачностью при смене вкладки
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize()
         ) { pageIndex ->
+            val pageOffset = ((pagerState.currentPage - pageIndex) +
+                pagerState.currentPageOffsetFraction).absoluteValue.coerceIn(0f, 1f)
+            val pageScale = 1f - (0.04f * pageOffset)
+            val pageAlpha = 1f - (0.28f * pageOffset)
+
             val date = weekDays[pageIndex]
             val dayLessons = uiState.lessonsByDate[date].orEmpty()
             val isTodayPage = date == uiState.today &&
                 uiState.selectedEvenWeek == uiState.isCurrentWeekEven
 
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = pageScale
+                        scaleY = pageScale
+                        alpha = pageAlpha
+                    },
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
@@ -225,12 +249,26 @@ private fun WeekParitySwitcher(
         )
         options.forEach { (isEven, label) ->
             val selected = selectedEvenWeek == isEven
-            Surface(
-                color = if (selected) {
+            val bgColor by animateColorAsState(
+                targetValue = if (selected) {
                     MaterialTheme.colorScheme.secondaryContainer
                 } else {
                     MaterialTheme.colorScheme.surfaceContainerLow
                 },
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+                label = "parityBg"
+            )
+            val fgColor by animateColorAsState(
+                targetValue = if (selected) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+                label = "parityFg"
+            )
+            Surface(
+                color = bgColor,
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .weight(1f)
@@ -244,11 +282,7 @@ private fun WeekParitySwitcher(
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                        color = fgColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -278,20 +312,40 @@ private fun WeekDaySelectorRow(
                 .getDisplayName(TextStyle.SHORT, Locale("ru"))
                 .replaceFirstChar { it.uppercase() }
 
-            val containerColor = when {
-                isSelected -> MaterialTheme.colorScheme.primary
-                isToday -> MaterialTheme.colorScheme.primaryContainer
-                else -> Color.Transparent
-            }
-            val contentColor = when {
-                isSelected -> MaterialTheme.colorScheme.onPrimary
-                isToday -> MaterialTheme.colorScheme.onPrimaryContainer
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
+            val containerColor by animateColorAsState(
+                targetValue = when {
+                    isSelected -> MaterialTheme.colorScheme.primary
+                    isToday -> MaterialTheme.colorScheme.primaryContainer
+                    else -> Color.Transparent
+                },
+                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                label = "dayContainer"
+            )
+            val contentColor by animateColorAsState(
+                targetValue = when {
+                    isSelected -> MaterialTheme.colorScheme.onPrimary
+                    isToday -> MaterialTheme.colorScheme.onPrimaryContainer
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                label = "dayContent"
+            )
+            val tabScale by animateFloatAsState(
+                targetValue = if (isSelected) 1.04f else 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "dayScale"
+            )
 
             Column(
                 modifier = Modifier
                     .weight(1f)
+                    .graphicsLayer {
+                        scaleX = tabScale
+                        scaleY = tabScale
+                    }
                     .clip(RoundedCornerShape(16.dp))
                     .background(containerColor)
                     .clickable { onSelectDay(index) }
@@ -453,7 +507,12 @@ private fun LessonCard(
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = if (isCurrent) 4.dp else 1.5.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize()
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
             .clickable { expanded = !expanded }
     ) {
         Row(
@@ -586,7 +645,11 @@ private fun LessonCard(
                 }
 
                 // Раскрывающийся блок с заметками, заданиями и кнопкой редактирования
-                AnimatedVisibility(visible = expanded) {
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = expandVertically(tween(220, easing = FastOutSlowInEasing)) + fadeIn(tween(220)),
+                    exit = shrinkVertically(tween(180, easing = FastOutSlowInEasing)) + fadeOut(tween(150))
+                ) {
                     Column(
                         modifier = Modifier.padding(top = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)

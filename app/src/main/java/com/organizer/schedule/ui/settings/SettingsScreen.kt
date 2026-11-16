@@ -17,8 +17,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
@@ -28,13 +31,20 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.organizer.schedule.domain.model.AppThemeMode
+import com.organizer.schedule.domain.model.ScheduleImportResult
 import com.organizer.schedule.domain.model.UserPreferences
 import com.organizer.schedule.notification.NotificationHelper
 import kotlinx.coroutines.Dispatchers
@@ -44,23 +54,28 @@ import java.time.DayOfWeek
 import kotlin.math.roundToInt
 
 /**
- * Экран настроек: тема оформления (DayNight + OLED), Dynamic Color, уведомления, первый день недели и экспорт в .ics.
+ * Экран настроек: тема оформления (DayNight + OLED), системный шрифт, 120 Гц, уведомления и импорт/экспорт расписания.
  */
 @Composable
 fun SettingsScreen(
     preferences: UserPreferences,
     onThemeModeChange: (AppThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
+    onUseSystemFontChange: (Boolean) -> Unit,
+    onHighRefreshRateChange: (Boolean) -> Unit,
     onNotificationSettingsChange: (Boolean, Int) -> Unit,
     onFirstDayOfWeekChange: (DayOfWeek) -> Unit,
     onGenerateIcsContent: suspend () -> String,
+    onGenerateJsonBackup: suspend () -> String,
+    onImportScheduleContent: suspend (String, Boolean) -> ScheduleImportResult,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    var pendingImportContent by remember { mutableStateOf<String?>(null) }
 
-    // Системный диалог сохранения файла .ics для импорта в Google Календарь
-    val exportLauncher = rememberLauncherForActivityResult(
+    // Экспорт в .ics для Google Календаря
+    val exportIcsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/calendar")
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -79,6 +94,54 @@ fun SettingsScreen(
                 "Ошибка при экспорте: ${result.exceptionOrNull()?.localizedMessage}"
             }
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Экспорт полной резервной копии расписания и заданий в .json
+    val exportJsonLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            val result = runCatching {
+                val jsonContent = onGenerateJsonBackup()
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { stream ->
+                        stream.write(jsonContent.toByteArray(Charsets.UTF_8))
+                    } ?: error("Не удалось открыть поток записи")
+                }
+            }
+            val message = if (result.isSuccess) {
+                "Файл расписания успешно сохранён (.json)"
+            } else {
+                "Ошибка сохранения: ${result.exceptionOrNull()?.localizedMessage}"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Импорт файла расписания (.json или .ics)
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            val readResult = runCatching {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)
+                        ?.use { it.readText() }
+                        ?: error("Не удалось прочитать файл")
+                }
+            }
+            readResult.onSuccess { text ->
+                pendingImportContent = text
+            }.onFailure { err ->
+                Toast.makeText(
+                    context,
+                    "Ошибка чтения файла: ${err.localizedMessage}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
@@ -110,6 +173,50 @@ fun SettingsScreen(
                                 modifier = Modifier.weight(1f)
                             )
                         }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Системный шрифт",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                "Использовать системный шрифт интерфейса устройства",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = preferences.useSystemFont,
+                            onCheckedChange = onUseSystemFontChange
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Высокая частота (120 Гц)",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                "Плавная прокрутка и анимации 120 fps на поддерживаемых экранах",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = preferences.highRefreshRate,
+                            onCheckedChange = onHighRefreshRateChange
+                        )
                     }
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -260,29 +367,129 @@ fun SettingsScreen(
             ) {
                 Column(
                     modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Экспорт расписания", style = MaterialTheme.typography.titleMedium)
+                    Text("Импорт и экспорт расписания", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Сохраните расписание в формате iCalendar (.ics) для быстрого импорта в Google Календарь с сохранением чётных/нечётных недель и номеров кабинетов.",
+                        "Сохраните резервную копию (.json), импортируйте готовый файл расписания (.json или .ics) или экспортируйте в Google Календарь.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Button(
-                        onClick = { exportLauncher.launch("organizer_schedule.ics") },
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                importLauncher.launch(
+                                    arrayOf("application/json", "text/calendar", "text/*", "*/*")
+                                )
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.FileUpload,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Импорт")
+                        }
+                        Button(
+                            onClick = { exportJsonLauncher.launch("organizer_backup.json") },
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.FileDownload,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Экспорт")
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { exportIcsLauncher.launch("organizer_schedule.ics") },
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.FileDownload,
+                            imageVector = Icons.Rounded.CalendarToday,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("Экспорт")
+                        Text("Экспорт в Google Календарь (.ics)")
                     }
                 }
             }
         }
+
+        item {
+            Text(
+                text = "Над приложением старался Али!",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp, bottom = 12.dp)
+            )
+        }
+    }
+
+    pendingImportContent?.let { content ->
+        AlertDialog(
+            onDismissRequest = { pendingImportContent = null },
+            title = { Text("Импорт расписания") },
+            text = {
+                Text("Заменить текущее расписание новыми уроками или добавить их к существующим?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        pendingImportContent = null
+                        coroutineScope.launch {
+                            val result = runCatching { onImportScheduleContent(content, true) }
+                            val msg = result.fold(
+                                onSuccess = {
+                                    "Заменено: уроков ${it.lessonsImported}, заданий ${it.homeworkImported}"
+                                },
+                                onFailure = { "Ошибка импорта: ${it.localizedMessage}" }
+                            )
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                ) {
+                    Text("Заменить")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { pendingImportContent = null }) {
+                        Text("Отмена")
+                    }
+                    TextButton(
+                        onClick = {
+                            pendingImportContent = null
+                            coroutineScope.launch {
+                                val result = runCatching { onImportScheduleContent(content, false) }
+                                val msg = result.fold(
+                                    onSuccess = {
+                                        "Добавлено: уроков ${it.lessonsImported}, заданий ${it.homeworkImported}"
+                                    },
+                                    onFailure = { "Ошибка импорта: ${it.localizedMessage}" }
+                                )
+                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    ) {
+                        Text("Добавить")
+                    }
+                }
+            }
+        )
     }
 }

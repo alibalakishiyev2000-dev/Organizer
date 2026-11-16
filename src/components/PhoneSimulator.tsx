@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Bell,
   BookOpen,
@@ -10,6 +10,7 @@ import {
   Clock,
   Edit3,
   FileDown,
+  FileUp,
   MapPin,
   Plus,
   Repeat,
@@ -21,6 +22,12 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { downloadIcsFile, generateScheduleIcs } from '../utils/icsExport';
+import {
+  downloadFile,
+  exportScheduleToJson,
+  parseScheduleBackupFile,
+  type ParsedScheduleBackup,
+} from '../utils/scheduleBackup';
 import {
   DAY_SHORT_NAMES,
   DYNAMIC_SEEDS,
@@ -42,6 +49,7 @@ import type {
   UserPreferences,
 } from '../types/organizer';
 import { LessonSheetModal } from './LessonSheetModal';
+import { OrganizerLogo } from './OrganizerLogo';
 
 type BottomTab = 'schedule' | 'homework' | 'settings';
 
@@ -61,6 +69,11 @@ interface PhoneSimulatorProps {
   onAddHomework: (lessonId: number, title: string, description: string, dueDate: string) => void;
   onDeleteHomework: (taskId: number) => void;
   onUpdatePreferences: (patch: Partial<UserPreferences>) => void;
+  onImportSchedule: (
+    lessons: Lesson[],
+    homework: HomeworkTask[],
+    replaceExisting: boolean
+  ) => { lessonsImported: number; homeworkImported: number };
   externalEditorTrigger?: number;
 }
 
@@ -80,6 +93,7 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
   onAddHomework,
   onDeleteHomework,
   onUpdatePreferences,
+  onImportSchedule,
 }) => {
   const [activeTab, setActiveTab] = useState<BottomTab>('schedule');
   const weekDays = useMemo(
@@ -102,6 +116,9 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
   }>({ open: false, lesson: null });
   const [hwModalOpen, setHwModalOpen] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [pendingImport, setPendingImport] = useState<ParsedScheduleBackup | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [manualNotification, setManualNotification] = useState<{
     subject: string;
     room: string;
@@ -192,9 +209,32 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
 
   const visibleNotification = manualNotification ?? activeAutoNotification;
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImportError(null);
+    try {
+      const text = await file.text();
+      const parsed = parseScheduleBackupFile(text);
+      setPendingImport(parsed);
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : 'Не удалось прочитать файл расписания'
+      );
+    }
+  };
+
   return (
     <div className={resolvedDark ? 'dark' : ''}>
-      <div className="relative w-full max-w-[410px] mx-auto h-[790px] rounded-[40px] border-[8px] border-slate-900 dark:border-zinc-800 bg-slate-50 dark:bg-black text-slate-900 dark:text-zinc-100 shadow-xl overflow-hidden flex flex-col">
+      <div
+        style={{
+          fontFamily: preferences.useSystemFont
+            ? 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            : '"DM Sans", "Plus Jakarta Sans", sans-serif',
+        }}
+        className="relative w-full max-w-[410px] mx-auto h-[790px] rounded-[40px] border-[8px] border-slate-900 dark:border-zinc-800 bg-slate-50 dark:bg-black text-slate-900 dark:text-zinc-100 shadow-xl overflow-hidden flex flex-col"
+      >
         {/* Android Heads-up Lesson Reminder Notification */}
         <AnimatePresence>
           {visibleNotification && (
@@ -246,21 +286,24 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
 
         {/* Material 3 TopAppBar */}
         <div className="px-4 py-2.5 flex items-center justify-between shrink-0">
-          <div>
-            <h2 className="text-lg font-semibold leading-tight tracking-tight">
-              {activeTab === 'homework'
-                ? 'Домашние задания'
-                : activeTab === 'settings'
-                  ? 'Настройки'
-                  : selectedEvenWeek
-                    ? 'Чётная неделя'
-                    : 'Нечётная неделя'}
-            </h2>
-            {activeTab === 'schedule' && (
-              <p className="text-xs text-slate-500 dark:text-zinc-400">
-                Сегодня, {todayFormatted}
-              </p>
-            )}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <OrganizerLogo className="w-8 h-8 rounded-xl shadow-xs shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold leading-tight tracking-tight truncate">
+                {activeTab === 'homework'
+                  ? 'Домашние задания'
+                  : activeTab === 'settings'
+                    ? 'Настройки'
+                    : selectedEvenWeek
+                      ? 'Чётная неделя'
+                      : 'Нечётная неделя'}
+              </h2>
+              {activeTab === 'schedule' && (
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Сегодня, {todayFormatted}
+                </p>
+              )}
+            </div>
           </div>
           {activeTab === 'schedule' && (
             <button
@@ -277,10 +320,18 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
           )}
         </div>
 
-        {/* Main Scrollable Viewport */}
-        <div className="flex-1 overflow-y-auto px-3.5 pb-24">
-          {activeTab === 'schedule' && (
-            <div className="space-y-3">
+        {/* Main Scrollable Viewport with smooth tab-opening transitions */}
+        <div className="flex-1 overflow-y-auto px-3.5 pb-24 overflow-x-hidden">
+          <AnimatePresence mode="wait">
+            {activeTab === 'schedule' && (
+              <motion.div
+                key="tab-schedule"
+                initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.99 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="space-y-3"
+              >
               {/* Even / Odd Week Switcher for viewing and editing */}
               <div className="grid grid-cols-2 gap-1.5">
                 {[
@@ -386,6 +437,16 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
                 })}
               </div>
 
+              {/* Animated Day Content Switch */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`${selectedDateStr}-${selectedEvenWeek}`}
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                  className="space-y-3"
+                >
               {/* Live Current Lesson Banner (shown on Today when viewing current week parity) */}
               {formatIsoDate(selectedDate) === todayIsoStr &&
                 selectedEvenWeek === isCurrentWeekEven && (
@@ -658,12 +719,21 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
                   })}
                 </div>
               )}
-            </div>
-          )}
+                </motion.div>
+              </AnimatePresence>
+              </motion.div>
+            )}
 
-          {/* Tab 2: Homework */}
-          {activeTab === 'homework' && (
-            <div className="space-y-3 pt-1">
+            {/* Tab 2: Homework */}
+            {activeTab === 'homework' && (
+              <motion.div
+                key="tab-homework"
+                initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.99 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="space-y-3 pt-1"
+              >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold">
@@ -759,12 +829,19 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
                     })}
                 </div>
               )}
-            </div>
-          )}
+              </motion.div>
+            )}
 
-          {/* Tab 3: Settings */}
-          {activeTab === 'settings' && (
-            <div className="space-y-3 pt-1">
+            {/* Tab 3: Settings */}
+            {activeTab === 'settings' && (
+              <motion.div
+                key="tab-settings"
+                initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.99 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="space-y-3 pt-1"
+              >
               <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 p-4 space-y-3">
                 <div className="text-sm font-semibold">Оформление</div>
                 <div className="grid grid-cols-3 gap-1.5">
@@ -796,6 +873,62 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
                       </button>
                     );
                   })}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <div className="text-xs font-medium">Системный шрифт</div>
+                    <div className="text-[11px] text-slate-500 dark:text-zinc-400">
+                      Использовать системный шрифт интерфейса
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdatePreferences({ useSystemFont: !preferences.useSystemFont })
+                    }
+                    style={{
+                      backgroundColor: preferences.useSystemFont ? seed.primary : undefined,
+                    }}
+                    className={`w-11 h-6 rounded-full p-0.5 transition-colors ${
+                      !preferences.useSystemFont ? 'bg-slate-300 dark:bg-zinc-700' : ''
+                    }`}
+                    aria-label="Системный шрифт"
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                        preferences.useSystemFont ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <div className="text-xs font-medium">Высокая частота (120 Гц)</div>
+                    <div className="text-[11px] text-slate-500 dark:text-zinc-400">
+                      Плавный интерфейс и анимации 120 fps
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdatePreferences({ highRefreshRate: !preferences.highRefreshRate })
+                    }
+                    style={{
+                      backgroundColor: preferences.highRefreshRate ? seed.primary : undefined,
+                    }}
+                    className={`w-11 h-6 rounded-full p-0.5 transition-colors ${
+                      !preferences.highRefreshRate ? 'bg-slate-300 dark:bg-zinc-700' : ''
+                    }`}
+                    aria-label="Высокая частота 120 Гц"
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                        preferences.highRefreshRate ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
@@ -979,48 +1112,96 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
               </div>
 
               <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 p-4 space-y-2.5">
-                <div className="text-sm font-semibold">Экспорт расписания</div>
+                <div className="text-sm font-semibold">Импорт и экспорт расписания</div>
                 <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
-                  Формат .ics (iCalendar) для импорта в Google Календарь с повторениями и номерами кабинетов.
+                  Сохраняйте полную копию (.json), загружайте файл расписания (.json / .ics) или экспортируйте в Google Календарь.
                 </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,.ics,application/json,text/calendar"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="py-2.5 px-3 rounded-2xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap"
+                  >
+                    <FileUp className="w-4 h-4" />
+                    Импорт
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const json = exportScheduleToJson(lessons, homework);
+                      downloadFile(json, 'organizer_backup.json', 'application/json');
+                      setImportError(null);
+                      setExportNotice(`Сохранено: уроков ${lessons.length}, заданий ${homework.length}`);
+                      setTimeout(() => setExportNotice(null), 4000);
+                    }}
+                    style={{ backgroundColor: seed.primary }}
+                    className="py-2.5 px-3 rounded-2xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 hover:opacity-95 transition-opacity whitespace-nowrap"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    Экспорт (.json)
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
                     const ics = generateScheduleIcs(lessons, today, isCurrentWeekEven);
                     downloadIcsFile(ics, 'organizer_schedule.ics');
-                    setExportNotice(`Экспортировано уроков: ${lessons.length}`);
-                    setTimeout(() => setExportNotice(null), 3500);
+                    setImportError(null);
+                    setExportNotice(`Экспортировано в .ics: ${lessons.length} уроков`);
+                    setTimeout(() => setExportNotice(null), 4000);
                   }}
-                  style={{ backgroundColor: seed.primary }}
-                  className="w-full py-2.5 px-4 rounded-2xl text-xs font-semibold text-white flex items-center justify-center gap-2 hover:opacity-95 transition-opacity"
+                  className="w-full py-2 px-3 rounded-2xl border border-slate-200 dark:border-zinc-700 text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors"
                 >
-                  <FileDown className="w-4 h-4" />
-                  Экспорт
+                  <Calendar className="w-3.5 h-3.5" />
+                  Экспорт в Google Календарь (.ics)
                 </button>
                 {exportNotice && (
                   <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                    {exportNotice} · файл organizer_schedule.ics скачан
+                    {exportNotice}
+                  </p>
+                )}
+                {importError && (
+                  <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
+                    {importError}
                   </p>
                 )}
               </div>
-            </div>
-          )}
+
+              <div className="pt-2 pb-1 text-center text-xs font-medium text-slate-500 dark:text-zinc-400">
+                Над приложением старался Али!
+              </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* Floating Action Button (+) */}
-        {activeTab === 'schedule' && (
-          <button
-            type="button"
-            onClick={() => setEditorState({ open: true, lesson: null })}
-            style={{ backgroundColor: primaryContainerBg, color: primaryContainerFg }}
-            className="absolute right-4 bottom-20 w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
-            aria-label="Добавить урок"
-          >
-            <Plus className="w-6 h-6" />
-          </button>
-        )}
+        {/* Floating Action Button (+) with animated presence */}
+        <AnimatePresence>
+          {activeTab === 'schedule' && (
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.18 }}
+              onClick={() => setEditorState({ open: true, lesson: null })}
+              style={{ backgroundColor: primaryContainerBg, color: primaryContainerFg }}
+              className="absolute right-4 bottom-20 w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+              aria-label="Добавить урок"
+            >
+              <Plus className="w-6 h-6" />
+            </motion.button>
+          )}
+        </AnimatePresence>
 
-        {/* Material 3 Bottom Navigation Bar */}
+        {/* Material 3 Bottom Navigation Bar with spring indicator */}
         <div className="h-[68px] bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-zinc-800 grid grid-cols-3 items-center px-2 shrink-0">
           {(
             [
@@ -1037,20 +1218,28 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
                 onClick={() => setActiveTab(id)}
                 className="flex flex-col items-center justify-center gap-1 py-1.5"
               >
-                <div
-                  style={
-                    active
-                      ? { backgroundColor: primaryContainerBg, color: primaryContainerFg }
-                      : undefined
-                  }
-                  className={`px-4 py-1 rounded-full transition-colors ${
-                    !active ? 'text-slate-500 dark:text-zinc-400' : ''
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
+                <div className="relative px-4 py-1 rounded-full flex items-center justify-center">
+                  {active && (
+                    <motion.div
+                      layoutId="phoneBottomNavIndicator"
+                      transition={{
+                        type: 'spring',
+                        stiffness: preferences.highRefreshRate ? 520 : 380,
+                        damping: preferences.highRefreshRate ? 34 : 30,
+                      }}
+                      style={{ backgroundColor: primaryContainerBg }}
+                      className="absolute inset-0 rounded-full"
+                    />
+                  )}
+                  <Icon
+                    style={active ? { color: primaryContainerFg } : undefined}
+                    className={`relative z-10 w-5 h-5 transition-transform duration-200 ${
+                      active ? 'scale-105' : 'text-slate-500 dark:text-zinc-400'
+                    }`}
+                  />
                 </div>
                 <span
-                  className={`text-[11px] font-medium ${
+                  className={`text-[11px] font-medium transition-colors ${
                     active
                       ? 'text-slate-900 dark:text-zinc-100 font-semibold'
                       : 'text-slate-500 dark:text-zinc-400'
@@ -1101,6 +1290,77 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
               setHwModalOpen(false);
             }}
           />
+        )}
+
+        {/* Import Confirmation Modal */}
+        {pendingImport && (
+          <div
+            className="absolute inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+            onClick={() => setPendingImport(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.16 }}
+              className="w-full rounded-3xl bg-white dark:bg-zinc-900 p-5 shadow-2xl border border-slate-200 dark:border-zinc-800 space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-base font-semibold">Импорт расписания</h3>
+              <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">
+                Найдено уроков: {pendingImport.lessons.length}
+                {pendingImport.homework.length > 0
+                  ? `, заданий: ${pendingImport.homework.length}`
+                  : ''}
+                . Заменить текущее расписание или добавить к существующему?
+              </p>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPendingImport(null)}
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-zinc-300"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const res = onImportSchedule(
+                      pendingImport.lessons,
+                      pendingImport.homework,
+                      false
+                    );
+                    setPendingImport(null);
+                    setExportNotice(
+                      `Добавлено: уроков ${res.lessonsImported}, заданий ${res.homeworkImported}`
+                    );
+                    setTimeout(() => setExportNotice(null), 4000);
+                  }}
+                  className="px-3 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-zinc-800"
+                >
+                  Добавить
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const res = onImportSchedule(
+                      pendingImport.lessons,
+                      pendingImport.homework,
+                      true
+                    );
+                    setPendingImport(null);
+                    setExportNotice(
+                      `Заменено: уроков ${res.lessonsImported}, заданий ${res.homeworkImported}`
+                    );
+                    setTimeout(() => setExportNotice(null), 4000);
+                  }}
+                  style={{ backgroundColor: seed.primary }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-white"
+                >
+                  Заменить
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </div>
     </div>

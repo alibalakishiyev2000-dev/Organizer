@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Органайзер</string>
+    <string name="widget_name">Уроки на сегодня</string>
+    <string name="widget_description">Показывает актуальное расписание уроков и пар на текущий день</string>
+</resources>

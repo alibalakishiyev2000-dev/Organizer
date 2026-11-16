@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Clock, Moon, Sun } from 'lucide-react';
 import { CodeExplorer } from './components/CodeExplorer';
+import { OrganizerLogo } from './components/OrganizerLogo';
 import { PhoneSimulator } from './components/PhoneSimulator';
 import { WidgetPreview } from './components/WidgetPreview';
 import {
@@ -36,6 +37,8 @@ export function App() {
     themeMode: 'SYSTEM',
     dynamicColor: true,
     dynamicSeed: 'teal',
+    useSystemFont: true,
+    highRefreshRate: true,
     notificationsEnabled: true,
     notificationMinutesBefore: 15,
     firstDayOfWeek: 1,
@@ -122,6 +125,40 @@ export function App() {
     setPreferences((prev) => ({ ...prev, ...patch }));
   };
 
+  const handleImportSchedule = (
+    importedLessons: Lesson[],
+    importedHomework: HomeworkTask[],
+    replaceExisting: boolean
+  ): { lessonsImported: number; homeworkImported: number } => {
+    const baseId = Date.now();
+    const idMap = new Map<number, number>();
+    const remappedLessons = importedLessons.map((lesson, idx) => {
+      const nextId = baseId + idx + 1;
+      idMap.set(lesson.id, nextId);
+      return { ...lesson, id: nextId };
+    });
+
+    const remappedHomework = importedHomework
+      .map((task, idx) => {
+        const mappedLessonId = idMap.get(task.lessonId);
+        if (!mappedLessonId) return null;
+        return {
+          ...task,
+          id: baseId + 10000 + idx + 1,
+          lessonId: mappedLessonId,
+        };
+      })
+      .filter((t): t is HomeworkTask => t !== null);
+
+    setLessons((prev) => (replaceExisting ? remappedLessons : [...prev, ...remappedLessons]));
+    setHomework((prev) => (replaceExisting ? remappedHomework : [...prev, ...remappedHomework]));
+
+    return {
+      lessonsImported: remappedLessons.length,
+      homeworkImported: remappedHomework.length,
+    };
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 flex flex-col">
       {/* Top Bar Contract: 3 zones separated by gap-8 */}
@@ -133,9 +170,10 @@ export function App() {
               e.preventDefault();
               setSection('simulator');
             }}
-            className="text-lg font-display font-bold tracking-tight text-slate-900 dark:text-zinc-100 whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-2.5 text-lg font-display font-bold tracking-tight text-slate-900 dark:text-zinc-100 whitespace-nowrap shrink-0"
           >
-            Органайзер
+            <OrganizerLogo className="w-7 h-7 rounded-lg shadow-xs shrink-0" />
+            <span>Органайзер</span>
           </a>
 
           <nav className="flex items-center gap-6 text-sm font-medium text-slate-600 dark:text-zinc-400">
@@ -227,6 +265,7 @@ export function App() {
                 onAddHomework={handleAddHomework}
                 onDeleteHomework={handleDeleteHomework}
                 onUpdatePreferences={handleUpdatePreferences}
+                onImportSchedule={handleImportSchedule}
               />
 
               {/* Right Column: Live Time Simulator, Dynamic Color Seeds, Home Screen Widget */}

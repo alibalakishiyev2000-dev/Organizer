@@ -3,6 +3,7 @@ package com.organizer.schedule.domain.repository
 import com.organizer.schedule.domain.model.AppThemeMode
 import com.organizer.schedule.domain.model.HomeworkTask
 import com.organizer.schedule.domain.model.Lesson
+import com.organizer.schedule.domain.model.ScheduleImportResult
 import com.organizer.schedule.domain.model.UserPreferences
 import kotlinx.coroutines.flow.Flow
 import java.time.DayOfWeek
@@ -26,8 +27,16 @@ interface ScheduleRepository {
     fun observePreferences(): Flow<UserPreferences>
     suspend fun updateThemeMode(mode: AppThemeMode)
     suspend fun updateDynamicColor(enabled: Boolean)
+    suspend fun updateUseSystemFont(enabled: Boolean)
+    suspend fun updateHighRefreshRate(enabled: Boolean)
     suspend fun updateNotificationSettings(enabled: Boolean, minutesBefore: Int)
     suspend fun updateFirstDayOfWeek(day: DayOfWeek)
+
+    suspend fun importSchedule(
+        lessons: List<Lesson>,
+        homework: List<HomeworkTask>,
+        replaceExisting: Boolean
+    ): ScheduleImportResult
 
     suspend fun ensureSeeded()
 }

@@ -89,12 +89,49 @@ class ScheduleRepositoryImpl @Inject constructor(
         preferencesDataStore.setDynamicColor(enabled)
     }
 
+    override suspend fun updateUseSystemFont(enabled: Boolean) {
+        preferencesDataStore.setUseSystemFont(enabled)
+    }
+
+    override suspend fun updateHighRefreshRate(enabled: Boolean) {
+        preferencesDataStore.setHighRefreshRate(enabled)
+    }
+
     override suspend fun updateNotificationSettings(enabled: Boolean, minutesBefore: Int) {
         preferencesDataStore.setNotificationSettings(enabled, minutesBefore)
     }
 
     override suspend fun updateFirstDayOfWeek(day: DayOfWeek) {
         preferencesDataStore.setFirstDayOfWeek(day)
+    }
+
+    override suspend fun importSchedule(
+        lessons: List<Lesson>,
+        homework: List<HomeworkTask>,
+        replaceExisting: Boolean
+    ): com.organizer.schedule.domain.model.ScheduleImportResult {
+        if (replaceExisting) {
+            lessonDao.deleteAll()
+        }
+
+        val idMapping = mutableMapOf<Long, Long>()
+        lessons.forEach { lesson ->
+            val newId = lessonDao.upsert(lesson.copy(id = 0L).toEntity())
+            idMapping[lesson.id] = newId
+        }
+
+        var importedHomeworkCount = 0
+        homework.forEach { task ->
+            val mappedLessonId = idMapping[task.lessonId] ?: return@forEach
+            homeworkDao.upsert(task.copy(id = 0L, lessonId = mappedLessonId).toEntity())
+            importedHomeworkCount++
+        }
+
+        TodayScheduleWidget.refreshAll(context)
+        return com.organizer.schedule.domain.model.ScheduleImportResult(
+            lessonsImported = lessons.size,
+            homeworkImported = importedHomeworkCount
+        )
     }
 
     /**

@@ -84,9 +84,19 @@ data class HomeworkTask(
 data class UserPreferences(
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
+    val useSystemFont: Boolean = true,
+    val highRefreshRate: Boolean = true,
     val notificationMinutesBefore: Int = 15,
     val notificationsEnabled: Boolean = true,
     val firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY
+)
+
+/**
+ * Результат импорта расписания из файла (.json или .ics).
+ */
+data class ScheduleImportResult(
+    val lessonsImported: Int,
+    val homeworkImported: Int
 )
 
 /**

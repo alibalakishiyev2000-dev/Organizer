@@ -45,4 +45,7 @@ interface LessonDao {
 
     @Delete
     suspend fun delete(lesson: LessonEntity)
+
+    @Query("DELETE FROM lessons")
+    suspend fun deleteAll()
 }
