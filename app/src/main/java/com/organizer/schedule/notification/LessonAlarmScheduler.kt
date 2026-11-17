@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import com.organizer.schedule.domain.model.Lesson
+import com.organizer.schedule.domain.model.WeekParityMode
 import com.organizer.schedule.domain.usecase.GetLessonsForDateUseCase
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.LocalDate
@@ -29,7 +30,8 @@ class LessonAlarmScheduler @Inject constructor(
     fun rescheduleUpcoming(
         lessons: List<Lesson>,
         enabled: Boolean,
-        minutesBefore: Int
+        minutesBefore: Int,
+        weekParityMode: WeekParityMode = WeekParityMode.AUTO
     ) {
         val manager = alarmManager ?: return
         // Отменяем предыдущие запланированные будильники
@@ -37,10 +39,16 @@ class LessonAlarmScheduler @Inject constructor(
         if (!enabled) return
 
         val now = LocalDateTime.now()
+        val today = LocalDate.now()
         // Планируем уведомления на ближайшие 7 дней
         for (offset in 0L..6L) {
-            val date = LocalDate.now().plusDays(offset)
-            val dayLessons = getLessonsForDateUseCase(lessons, date)
+            val date = today.plusDays(offset)
+            val dayLessons = getLessonsForDateUseCase(
+                lessons = lessons,
+                targetDate = date,
+                weekParityMode = weekParityMode,
+                referenceDate = today
+            )
 
             dayLessons.forEach { lesson ->
                 val lessonDateTime = LocalDateTime.of(date, lesson.startTime)

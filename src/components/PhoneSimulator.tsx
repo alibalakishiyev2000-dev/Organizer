@@ -41,6 +41,7 @@ import {
   filterLessonsForDate,
   formatDurationRu,
   formatIsoDate,
+  getIsoWeekNumber,
   getJsDayToIso,
 } from '../data/initialData';
 import type {
@@ -49,6 +50,7 @@ import type {
   HomeworkTask,
   Lesson,
   UserPreferences,
+  WeekParityMode,
 } from '../types/organizer';
 import { LessonSheetModal } from './LessonSheetModal';
 import { OrganizerLogo } from './OrganizerLogo';
@@ -322,8 +324,8 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
           )}
         </div>
 
-        {/* Main Scrollable Viewport with smooth tab-opening transitions */}
-        <div className="flex-1 overflow-y-auto px-3.5 pb-24 overflow-x-hidden">
+        {/* Main Scrollable Viewport extending behind the floating iOS capsule bar */}
+        <div className="flex-1 overflow-y-auto px-3.5 pb-32 overflow-x-hidden">
           <AnimatePresence mode="wait">
             {activeTab === 'schedule' && (
               <motion.div
@@ -1080,36 +1082,91 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
                 )}
               </div>
 
-              <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 p-4 space-y-2.5">
-                <div className="text-sm font-semibold">Первый день недели</div>
-                <div className="grid grid-cols-2 gap-2">
-                  {(
-                    [
-                      [1, 'Понедельник'],
-                      [7, 'Воскресенье'],
-                    ] as [1 | 7, string][]
-                  ).map(([day, label]) => {
-                    const active = preferences.firstDayOfWeek === day;
-                    return (
-                      <button
-                        key={day}
-                        type="button"
-                        onClick={() => onUpdatePreferences({ firstDayOfWeek: day })}
-                        style={
-                          active
-                            ? { backgroundColor: primaryContainerBg, color: primaryContainerFg }
-                            : undefined
-                        }
-                        className={`py-2 px-3 rounded-xl text-xs font-medium transition-colors ${
-                          !active
-                            ? 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'
-                            : ''
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
+              <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 p-4 space-y-3">
+                <div className="text-sm font-semibold">Календарь</div>
+                <div className="space-y-2">
+                  <div className="text-xs font-medium text-slate-600 dark:text-zinc-400">
+                    Первый день недели
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        [1, 'Понедельник'],
+                        [7, 'Воскресенье'],
+                      ] as [1 | 7, string][]
+                    ).map(([day, label]) => {
+                      const active = preferences.firstDayOfWeek === day;
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => onUpdatePreferences({ firstDayOfWeek: day })}
+                          style={
+                            active
+                              ? { backgroundColor: primaryContainerBg, color: primaryContainerFg }
+                              : undefined
+                          }
+                          className={`py-2 px-3 rounded-xl text-xs font-medium transition-colors ${
+                            !active
+                              ? 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'
+                              : ''
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <div className="text-xs font-medium text-slate-600 dark:text-zinc-400">
+                    Текущая неделя
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-relaxed">
+                    {(() => {
+                      const weekNum = getIsoWeekNumber(today);
+                      const autoEven = weekNum % 2 === 0;
+                      if (preferences.weekParityMode === 'AUTO') {
+                        return `Автоматически по номеру недели в году (${weekNum}-я): сейчас ${
+                          autoEven ? 'Верхняя' : 'Нижняя'
+                        }`;
+                      }
+                      return `Задано вручную: текущая неделя — ${
+                        preferences.weekParityMode === 'EVEN' ? 'Верхняя' : 'Нижняя'
+                      }`;
+                    })()}
+                  </p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(
+                      [
+                        ['AUTO', 'Авто'],
+                        ['EVEN', 'Верхняя'],
+                        ['ODD', 'Нижняя'],
+                      ] as [WeekParityMode, string][]
+                    ).map(([mode, label]) => {
+                      const active = preferences.weekParityMode === mode;
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => onUpdatePreferences({ weekParityMode: mode })}
+                          style={
+                            active
+                              ? { backgroundColor: primaryContainerBg, color: primaryContainerFg }
+                              : undefined
+                          }
+                          className={`py-2 px-2 rounded-xl text-xs font-medium transition-colors ${
+                            !active
+                              ? 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'
+                              : ''
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -1202,7 +1259,7 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
           </AnimatePresence>
         </div>
 
-        {/* Floating Action Button (+) with animated presence */}
+        {/* Floating Action Button (+) above iOS capsule */}
         <AnimatePresence>
           {activeTab === 'schedule' && (
             <motion.button
@@ -1212,8 +1269,12 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.18 }}
               onClick={() => setEditorState({ open: true, lesson: null })}
-              style={{ backgroundColor: primaryContainerBg, color: primaryContainerFg }}
-              className="absolute right-4 bottom-20 w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+              style={{
+                backgroundColor: primaryContainerBg,
+                color: primaryContainerFg,
+                bottom: 'calc(92px + env(safe-area-inset-bottom, 0px))',
+              }}
+              className="absolute right-4 z-20 w-13 h-13 rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
               aria-label="Добавить урок"
             >
               <Plus className="w-6 h-6" />
@@ -1221,8 +1282,14 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
           )}
         </AnimatePresence>
 
-        {/* Material 3 Bottom Navigation Bar with spring indicator */}
-        <div className="h-[68px] bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-zinc-800 grid grid-cols-3 items-center px-2 shrink-0">
+        {/* Floating iOS-style Bottom Navigation Bar (pill capsule + blur(20px) + sliding pill indicator) */}
+        <nav
+          aria-label="Навигация"
+          style={{
+            bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+          }}
+          className="absolute left-4 right-4 z-30 rounded-full p-1.5 grid grid-cols-3 items-center bg-white/80 dark:bg-zinc-900/78 backdrop-blur-[20px] border border-white/85 dark:border-white/15 shadow-[0_12px_32px_rgba(15,23,42,0.14)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.55)]"
+        >
           {(
             [
               { id: 'schedule', label: 'Расписание', Icon: Calendar },
@@ -1236,33 +1303,38 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
                 key={id}
                 type="button"
                 onClick={() => setActiveTab(id)}
-                className="flex flex-col items-center justify-center gap-1 py-1.5"
+                className="relative flex flex-col items-center justify-center gap-0.5 py-2 px-2 rounded-full transition-colors"
               >
-                <div className="relative px-4 py-1 rounded-full flex items-center justify-center">
-                  {active && (
-                    <motion.div
-                      layoutId="phoneBottomNavIndicator"
-                      transition={{
-                        type: 'spring',
-                        stiffness: preferences.highRefreshRate ? 520 : 380,
-                        damping: preferences.highRefreshRate ? 34 : 30,
-                      }}
-                      style={{ backgroundColor: primaryContainerBg }}
-                      className="absolute inset-0 rounded-full"
-                    />
-                  )}
-                  <Icon
-                    style={active ? { color: primaryContainerFg } : undefined}
-                    className={`relative z-10 w-5 h-5 transition-transform duration-200 ${
-                      active ? 'scale-105' : 'text-slate-500 dark:text-zinc-400'
-                    }`}
+                {active && (
+                  <motion.div
+                    layoutId="phoneFloatingIosPill"
+                    transition={{
+                      type: 'spring',
+                      stiffness: preferences.highRefreshRate ? 500 : 360,
+                      damping: preferences.highRefreshRate ? 35 : 30,
+                    }}
+                    style={{
+                      backgroundColor: resolvedDark
+                        ? `${seed.primary}38`
+                        : `${seed.primary}1F`,
+                    }}
+                    className="absolute inset-0 rounded-full border border-white/40 dark:border-white/10"
                   />
-                </div>
-                <span
-                  className={`text-[11px] font-medium transition-colors ${
+                )}
+                <Icon
+                  style={active ? { color: seed.primary } : undefined}
+                  className={`relative z-10 w-[19px] h-[19px] transition-transform duration-200 ${
                     active
-                      ? 'text-slate-900 dark:text-zinc-100 font-semibold'
-                      : 'text-slate-500 dark:text-zinc-400'
+                      ? 'scale-105'
+                      : 'text-zinc-800 dark:text-zinc-200'
+                  }`}
+                />
+                <span
+                  style={active ? { color: seed.primary } : undefined}
+                  className={`relative z-10 text-[10.5px] leading-tight transition-colors ${
+                    active
+                      ? 'font-semibold'
+                      : 'font-medium text-zinc-800 dark:text-zinc-200'
                   }`}
                 >
                   {label}
@@ -1270,7 +1342,7 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
               </button>
             );
           })}
-        </div>
+        </nav>
 
         {/* Add/Edit Lesson Modal Bottom Sheet */}
         {editorState.open && (

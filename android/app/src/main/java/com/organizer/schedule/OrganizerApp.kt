@@ -37,7 +37,8 @@ class OrganizerApp : Application() {
                 alarmScheduler.rescheduleUpcoming(
                     lessons = lessons,
                     enabled = prefs.notificationsEnabled,
-                    minutesBefore = prefs.notificationMinutesBefore
+                    minutesBefore = prefs.notificationMinutesBefore,
+                    weekParityMode = prefs.weekParityMode
                 )
             }
         }

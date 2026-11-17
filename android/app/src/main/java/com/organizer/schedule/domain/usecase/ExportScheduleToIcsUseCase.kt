@@ -2,6 +2,7 @@ package com.organizer.schedule.domain.usecase
 
 import com.organizer.schedule.domain.model.Lesson
 import com.organizer.schedule.domain.model.RecurrenceType
+import com.organizer.schedule.domain.model.WeekParityMode
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -22,7 +23,8 @@ class ExportScheduleToIcsUseCase @Inject constructor(
     operator fun invoke(
         lessons: List<Lesson>,
         referenceDate: LocalDate = LocalDate.now(),
-        zoneId: ZoneId = ZoneId.systemDefault()
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        weekParityMode: WeekParityMode = WeekParityMode.AUTO
     ): String {
         val nowStamp = LocalDateTime.now(ZoneOffset.UTC).format(utcFormatter)
         val sb = StringBuilder()
@@ -36,7 +38,7 @@ class ExportScheduleToIcsUseCase @Inject constructor(
         sb.appendLine("X-WR-TIMEZONE:${zoneId.id}")
 
         lessons.forEach { lesson ->
-            val firstDate = resolveFirstOccurrenceDate(lesson, referenceDate)
+            val firstDate = resolveFirstOccurrenceDate(lesson, referenceDate, weekParityMode)
             val startZdt = LocalDateTime.of(firstDate, lesson.startTime)
                 .atZone(zoneId)
                 .withZoneSameInstant(ZoneOffset.UTC)
@@ -80,7 +82,11 @@ class ExportScheduleToIcsUseCase @Inject constructor(
         return sb.toString().replace("\n", "\r\n")
     }
 
-    private fun resolveFirstOccurrenceDate(lesson: Lesson, fromDate: LocalDate): LocalDate {
+    private fun resolveFirstOccurrenceDate(
+        lesson: Lesson,
+        fromDate: LocalDate,
+        weekParityMode: WeekParityMode
+    ): LocalDate {
         if (lesson.recurrence == RecurrenceType.ONCE && lesson.specificDate != null) {
             return lesson.specificDate
         }
@@ -90,12 +96,12 @@ class ExportScheduleToIcsUseCase @Inject constructor(
 
         when (lesson.recurrence) {
             RecurrenceType.EVEN_WEEK -> {
-                if (!getLessonsForDateUseCase.isEvenWeek(candidate)) {
+                if (!getLessonsForDateUseCase.isEvenWeek(candidate, weekParityMode, fromDate)) {
                     candidate = candidate.plusWeeks(1)
                 }
             }
             RecurrenceType.ODD_WEEK -> {
-                if (getLessonsForDateUseCase.isEvenWeek(candidate)) {
+                if (getLessonsForDateUseCase.isEvenWeek(candidate, weekParityMode, fromDate)) {
                     candidate = candidate.plusWeeks(1)
                 }
             }

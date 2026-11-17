@@ -15,6 +15,7 @@ import com.organizer.schedule.domain.model.RecurrenceType
 import com.organizer.schedule.domain.model.ScheduleImportResult
 import com.organizer.schedule.domain.model.SubjectColor
 import com.organizer.schedule.domain.model.UserPreferences
+import com.organizer.schedule.domain.model.WeekParityMode
 import com.organizer.schedule.domain.repository.ScheduleRepository
 import com.organizer.schedule.widget.TodayScheduleWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -107,6 +108,11 @@ class ScheduleRepositoryImpl @Inject constructor(
 
     override suspend fun updateFirstDayOfWeek(day: DayOfWeek) {
         preferencesDataStore.setFirstDayOfWeek(day)
+    }
+
+    override suspend fun updateWeekParityMode(mode: WeekParityMode) {
+        preferencesDataStore.setWeekParityMode(mode)
+        TodayScheduleWidget.refreshAll(context)
     }
 
     override suspend fun importSchedule(

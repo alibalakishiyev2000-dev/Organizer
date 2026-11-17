@@ -10,6 +10,7 @@ import {
   createInitialLessons,
   filterLessonsForDate,
   minutesToTime,
+  resolveIsEvenWeek,
 } from './data/initialData';
 import type {
   DynamicSeedId,
@@ -30,9 +31,6 @@ export function App() {
 
   // Симулируемое время суток (по умолчанию 09:15 — идёт первый урок) для наглядной демонстрации прогресс-бара
   const [nowMinutes, setNowMinutes] = useState<number>(9 * 60 + 15);
-  const [isEvenWeek, setIsEvenWeek] = useState<boolean>(true);
-  const [selectedEvenWeek, setSelectedEvenWeek] = useState<boolean>(true);
-
   const [preferences, setPreferences] = useState<UserPreferences>({
     themeMode: 'SYSTEM',
     dynamicColor: true,
@@ -42,7 +40,20 @@ export function App() {
     notificationsEnabled: true,
     notificationMinutesBefore: 15,
     firstDayOfWeek: 1,
+    weekParityMode: 'AUTO',
   });
+
+  const isEvenWeek = useMemo(
+    () => resolveIsEvenWeek(today, preferences.weekParityMode, today),
+    [today, preferences.weekParityMode]
+  );
+  const [selectedEvenWeek, setSelectedEvenWeek] = useState<boolean>(() =>
+    resolveIsEvenWeek(new Date(), 'AUTO')
+  );
+
+  useEffect(() => {
+    setSelectedEvenWeek(isEvenWeek);
+  }, [isEvenWeek]);
 
   const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() =>
     window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
@@ -322,28 +333,26 @@ export function App() {
                     </div>
 
                     <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-zinc-800">
-                      <button
-                        type="button"
-                        onClick={() => setIsEvenWeek(true)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                          isEvenWeek
-                            ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-zinc-100 shadow-xs'
-                            : 'text-slate-600 dark:text-zinc-400'
-                        }`}
-                      >
-                        Верхняя
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsEvenWeek(false)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                          !isEvenWeek
-                            ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-zinc-100 shadow-xs'
-                            : 'text-slate-600 dark:text-zinc-400'
-                        }`}
-                      >
-                        Нижняя
-                      </button>
+                      {(
+                        [
+                          ['AUTO', 'Авто'],
+                          ['EVEN', 'Верхняя'],
+                          ['ODD', 'Нижняя'],
+                        ] as const
+                      ).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => handleUpdatePreferences({ weekParityMode: mode })}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                            preferences.weekParityMode === mode
+                              ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-zinc-100 shadow-xs'
+                              : 'text-slate-600 dark:text-zinc-400'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </section>

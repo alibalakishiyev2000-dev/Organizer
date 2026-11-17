@@ -1,18 +1,69 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" fill="none">
-  <rect width="108" height="108" rx="26" fill="#FFFFFF"/>
-  <circle cx="54" cy="54" r="46" fill="#F1F5F9"/>
-  <rect x="27" y="27" width="54" height="54" rx="7" fill="#FFFFFF"/>
-  <path d="M34 27H74C77.87 27 81 30.13 81 34V42H27V34C27 30.13 30.13 27 34 27Z" fill="#4285F4"/>
-  <rect x="27" y="42" width="8" height="27" fill="#4285F4"/>
-  <path d="M67 27H74C77.87 27 81 30.13 81 34V42H67V27Z" fill="#EA4335"/>
-  <rect x="73" y="42" width="8" height="27" fill="#FBBC04"/>
-  <path d="M67 69H81V74C81 77.87 77.87 81 74 81H67V69Z" fill="#FBBC04"/>
-  <path d="M27 69H67V81H34C30.13 81 27 77.87 27 74V69Z" fill="#34A853"/>
-  <rect x="34" y="42" width="40" height="27" rx="3" fill="#FFFFFF"/>
-  <circle cx="43.5" cy="31.5" r="2.5" fill="#FFFFFF"/>
-  <circle cx="64.5" cy="31.5" r="2.5" fill="#FFFFFF"/>
-  <rect x="39" y="47" width="23" height="4" rx="2" fill="#4285F4"/>
-  <rect x="39" y="54" width="30" height="4" rx="2" fill="#34A853"/>
-  <rect x="39" y="61" width="19" height="4" rx="2" fill="#EA4335"/>
-  <rect x="60" y="61" width="9" height="4" rx="2" fill="#FBBC04"/>
+  <defs>
+    <radialGradient id="bgObsidian" cx="50%" cy="50%" r="58%">
+      <stop offset="0%" stop-color="#141820"/>
+      <stop offset="60%" stop-color="#050608"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </radialGradient>
+    <linearGradient id="glassBody" x1="26" y1="28" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1A1F28"/>
+      <stop offset="50%" stop-color="#090B0F"/>
+      <stop offset="100%" stop-color="#020304"/>
+    </linearGradient>
+    <linearGradient id="glassRim" x1="28" y1="32" x2="80" y2="78" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.72"/>
+      <stop offset="50%" stop-color="#94A3B8" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.82"/>
+    </linearGradient>
+    <linearGradient id="leftBevel" x1="24" y1="56" x2="47" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#CBD5E1" stop-opacity="0.58"/>
+      <stop offset="45%" stop-color="#1E242E" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#0B0E14" stop-opacity="0.45"/>
+    </linearGradient>
+    <linearGradient id="leftCaustic" x1="25" y1="57" x2="43" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.96"/>
+      <stop offset="50%" stop-color="#E2E8F0" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rightBevel" x1="82" y1="48" x2="54" y2="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8"/>
+      <stop offset="32%" stop-color="#333C4A" stop-opacity="0.3"/>
+      <stop offset="72%" stop-color="#090B10" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#CBD5E1" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="rightCaustic" x1="81" y1="50" x2="56" y2="83" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.68"/>
+      <stop offset="100%" stop-color="#CBD5E1" stop-opacity="0.12"/>
+    </linearGradient>
+    <linearGradient id="topFace" x1="34" y1="28" x2="68" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0E1117"/>
+      <stop offset="55%" stop-color="#040507"/>
+      <stop offset="100%" stop-color="#010102"/>
+    </linearGradient>
+    <linearGradient id="topRim" x1="32" y1="32" x2="74" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.72"/>
+      <stop offset="50%" stop-color="#CBD5E1" stop-opacity="0.26"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.86"/>
+    </linearGradient>
+    <linearGradient id="topSheen" x1="32" y1="30" x2="56" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="108" height="108" rx="26" fill="url(#bgObsidian)"/>
+  <path d="M53.5,24.2 C56.2,22.8 59.3,23.2 61.8,25.2 L81.8,41.6 C85.0,44.2 85.8,48.6 83.7,52.2 L68.8,77.6 C66.8,81.0 63.3,83.4 59.4,84.4 L49.6,86.7 C45.8,87.6 41.8,86.2 39.2,83.2 L24.6,66.0 C21.8,62.7 21.4,57.8 23.8,54.0 L36.6,34.4 C38.0,32.2 40.0,30.5 42.3,29.4 Z" fill="url(#glassBody)" stroke="url(#glassRim)" stroke-width="1"/>
+  <path d="M24.2,55.2 L32.2,49.4 L48.2,63.2 L46.2,85.2 C43.2,85.2 40.4,83.8 38.4,81.4 L25.4,66.0 C22.9,63.0 22.4,58.6 24.2,55.2 Z" fill="url(#leftBevel)"/>
+  <path d="M26.2,56.8 C27.8,63.4 33.4,71.2 42.6,79.6 C39.4,78.6 33.2,72.4 28.2,65.2 C25.8,61.8 25.3,58.8 26.2,56.8 Z" fill="url(#leftCaustic)"/>
+  <path d="M78.8,44.4 L83.4,51.6 L68.6,76.8 C66.6,80.2 63.3,82.6 59.4,83.6 L48.2,85.8 L48.6,63.2 L78.8,44.4 Z" fill="url(#rightBevel)"/>
+  <path d="M81.2,49.8 C81.6,53.4 76.2,63.6 67.4,75.8 C64.4,79.8 60.4,82.4 55.2,83.4 C61.2,79.2 67.4,71.8 73.2,62.4 C77.2,56.0 79.4,51.6 81.2,49.8 Z" fill="url(#rightCaustic)"/>
+  <path d="M53.2,27.0 C55.4,25.8 58.1,26.1 60.1,27.7 L76.8,40.8 C79.1,42.6 79.1,46.0 76.7,47.6 L51.4,62.6 C49.1,64.0 46.2,63.7 44.2,61.9 L30.8,49.8 C28.5,47.8 28.7,44.2 31.2,42.5 Z" fill="url(#topFace)" stroke="url(#topRim)" stroke-width="0.9"/>
+  <path d="M53.2,27.8 C55.0,26.8 57.2,27.0 58.9,28.3 L68.0,35.4 C57.2,37.8 45.8,44.2 36.2,53.4 L31.4,49.0 C29.5,47.3 29.7,44.3 31.8,42.9 Z" fill="url(#topSheen)"/>
+  <g transform="rotate(-29 53 45)">
+    <rect x="39.5" y="38.5" width="19.5" height="4" rx="2" fill="#FFFFFF"/>
+    <circle cx="62.5" cy="40.5" r="2.1" fill="#FFFFFF" fill-opacity="0.92"/>
+    <rect x="39.5" y="44.5" width="26" height="4" rx="2" fill="#FFFFFF" fill-opacity="0.95"/>
+    <rect x="39.5" y="50.5" width="17.5" height="4" rx="2" fill="#E2E8F0" fill-opacity="0.72"/>
+  </g>
 </svg>

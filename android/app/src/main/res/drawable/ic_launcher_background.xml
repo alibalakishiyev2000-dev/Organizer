@@ -1,14 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Чистый светлый фон в стиле иконок Google -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M0,0h108v108h-108z" />
-    <path
-        android:fillColor="#FFF1F5F9"
-        android:pathData="M54,54m-42,0a42,42 0,1 1,84 0a42,42 0,1 1,-84 0" />
+    <!-- Глубокий обсидиановый фон в стиле Black Glass -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="54"
+                android:centerY="54"
+                android:gradientRadius="62"
+                android:type="radial">
+                <item
+                    android:color="#FF11141B"
+                    android:offset="0" />
+                <item
+                    android:color="#FF050608"
+                    android:offset="0.58" />
+                <item
+                    android:color="#FF000000"
+                    android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>

@@ -5,6 +5,7 @@ import com.organizer.schedule.domain.model.HomeworkTask
 import com.organizer.schedule.domain.model.Lesson
 import com.organizer.schedule.domain.model.ScheduleImportResult
 import com.organizer.schedule.domain.model.UserPreferences
+import com.organizer.schedule.domain.model.WeekParityMode
 import kotlinx.coroutines.flow.Flow
 import java.time.DayOfWeek
 
@@ -31,6 +32,7 @@ interface ScheduleRepository {
     suspend fun updateHighRefreshRate(enabled: Boolean)
     suspend fun updateNotificationSettings(enabled: Boolean, minutesBefore: Int)
     suspend fun updateFirstDayOfWeek(day: DayOfWeek)
+    suspend fun updateWeekParityMode(mode: WeekParityMode)
 
     suspend fun importSchedule(
         lessons: List<Lesson>,

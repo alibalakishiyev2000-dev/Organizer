@@ -15,6 +15,15 @@ enum class RecurrenceType(val title: String) {
 }
 
 /**
+ * Режим определения текущей недели (Автоматически по календарю или вручную).
+ */
+enum class WeekParityMode(val title: String) {
+    AUTO("Авто"),
+    EVEN("Верхняя"),
+    ODD("Нижняя")
+}
+
+/**
  * Тема оформления приложения.
  */
 enum class AppThemeMode(val title: String) {
@@ -88,7 +97,8 @@ data class UserPreferences(
     val highRefreshRate: Boolean = true,
     val notificationMinutesBefore: Int = 15,
     val notificationsEnabled: Boolean = true,
-    val firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY
+    val firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
+    val weekParityMode: WeekParityMode = WeekParityMode.AUTO
 )
 
 /**

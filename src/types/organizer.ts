@@ -12,6 +12,8 @@ export type SubjectColorId =
 
 export type AppThemeMode = 'SYSTEM' | 'LIGHT' | 'DARK';
 
+export type WeekParityMode = 'AUTO' | 'EVEN' | 'ODD';
+
 export type DynamicSeedId = 'teal' | 'indigo' | 'sage' | 'terracotta';
 
 export interface SubjectColorPalette {
@@ -54,6 +56,7 @@ export interface UserPreferences {
   notificationsEnabled: boolean;
   notificationMinutesBefore: number;
   firstDayOfWeek: 1 | 7; // 1 = Пн, 7 = Вс
+  weekParityMode: WeekParityMode;
 }
 
 export type CurrentLessonStatus =

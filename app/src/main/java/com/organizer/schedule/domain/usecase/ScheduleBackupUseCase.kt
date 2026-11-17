@@ -4,6 +4,7 @@ import com.organizer.schedule.domain.model.HomeworkTask
 import com.organizer.schedule.domain.model.Lesson
 import com.organizer.schedule.domain.model.RecurrenceType
 import com.organizer.schedule.domain.model.SubjectColor
+import com.organizer.schedule.domain.model.WeekParityMode
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -84,13 +85,16 @@ class ScheduleBackupUseCase @Inject constructor(
         return root.toString(2)
     }
 
-    fun parseBackupFile(rawContent: String): ParsedScheduleBackup {
+    fun parseBackupFile(
+        rawContent: String,
+        weekParityMode: WeekParityMode = WeekParityMode.AUTO
+    ): ParsedScheduleBackup {
         val cleaned = rawContent.replace("\uFEFF", "").trim()
         if (cleaned.isEmpty()) {
             throw IllegalArgumentException("Файл расписания пуст")
         }
         return if (cleaned.startsWith("BEGIN:VCALENDAR", ignoreCase = true)) {
-            parseIcs(cleaned)
+            parseIcs(cleaned, weekParityMode)
         } else {
             parseJson(cleaned)
         }
@@ -209,7 +213,10 @@ class ScheduleBackupUseCase @Inject constructor(
         return ParsedScheduleBackup(lessons = lessons, homework = homework)
     }
 
-    private fun parseIcs(rawIcs: String): ParsedScheduleBackup {
+    private fun parseIcs(
+        rawIcs: String,
+        weekParityMode: WeekParityMode = WeekParityMode.AUTO
+    ): ParsedScheduleBackup {
         // Разворачиваем перенесённые строки RFC 5545 (CRLF + пробел/таб)
         val unfolded = rawIcs
             .replace("\r\n ", "")
@@ -251,7 +258,7 @@ class ScheduleBackupUseCase @Inject constructor(
                             }
                             val recurrence = when {
                                 rrule.contains("INTERVAL=2", ignoreCase = true) -> {
-                                    if (getLessonsForDateUseCase.isEvenWeek(startDt.toLocalDate())) {
+                                    if (getLessonsForDateUseCase.isEvenWeek(startDt.toLocalDate(), weekParityMode)) {
                                         RecurrenceType.EVEN_WEEK
                                     } else {
                                         RecurrenceType.ODD_WEEK

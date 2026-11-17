@@ -34,6 +34,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.organizer.schedule.MainActivity
 import com.organizer.schedule.data.mapper.toDomain
+import com.organizer.schedule.data.preferences.UserPreferencesDataStore
 import com.organizer.schedule.domain.model.Lesson
 import com.organizer.schedule.domain.usecase.GetLessonsForDateUseCase
 import dagger.hilt.EntryPoint
@@ -56,6 +57,7 @@ class TodayScheduleWidget : GlanceAppWidget() {
     interface WidgetEntryPoint {
         fun lessonDao(): com.organizer.schedule.data.local.dao.LessonDao
         fun getLessonsForDateUseCase(): GetLessonsForDateUseCase
+        fun userPreferencesDataStore(): UserPreferencesDataStore
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -64,21 +66,36 @@ class TodayScheduleWidget : GlanceAppWidget() {
             WidgetEntryPoint::class.java
         )
         val today = LocalDate.now()
+        val prefs = entryPoint.userPreferencesDataStore().preferences.first()
         val allLessons = entryPoint.lessonDao().observeAll().first().map { it.toDomain() }
-        val todayLessons = entryPoint.getLessonsForDateUseCase()(allLessons, today)
+        val isCurrentWeekEven = entryPoint.getLessonsForDateUseCase().isEvenWeek(today, prefs.weekParityMode)
+        val todayLessons = entryPoint.getLessonsForDateUseCase()(
+            lessons = allLessons,
+            targetDate = today,
+            evenWeekOverride = isCurrentWeekEven
+        )
 
         provideContent {
             GlanceTheme {
-                WidgetContent(today = today, lessons = todayLessons)
+                WidgetContent(
+                    today = today,
+                    lessons = todayLessons,
+                    isCurrentWeekEven = isCurrentWeekEven
+                )
             }
         }
     }
 
     @Composable
-    private fun WidgetContent(today: LocalDate, lessons: List<Lesson>) {
+    private fun WidgetContent(
+        today: LocalDate,
+        lessons: List<Lesson>,
+        isCurrentWeekEven: Boolean
+    ) {
         val dateText = today.format(
             DateTimeFormatter.ofPattern("EEEE, d MMM", Locale("ru"))
         ).replaceFirstChar { it.uppercase() }
+        val weekLabel = if (isCurrentWeekEven) "Верхняя" else "Нижняя"
         val now = LocalTime.now()
         val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -96,19 +113,33 @@ class TodayScheduleWidget : GlanceAppWidget() {
             ) {
                 Text(
                     text = "Сегодня · $dateText",
+                    maxLines = 1,
+                    modifier = GlanceModifier.defaultWeight(),
                     style = TextStyle(
                         color = GlanceTheme.colors.onSurface,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
                 )
+                Spacer(modifier = GlanceModifier.width(6.dp))
+                Text(
+                    text = weekLabel,
+                    maxLines = 1,
+                    style = TextStyle(
+                        color = GlanceTheme.colors.primary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                )
             }
 
-            Spacer(modifier = GlanceModifier.height(8.dp))
+            Spacer(modifier = GlanceModifier.height(10.dp))
 
             if (lessons.isEmpty()) {
                 Box(
-                    modifier = GlanceModifier.fillMaxSize(),
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .defaultWeight(),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -120,48 +151,60 @@ class TodayScheduleWidget : GlanceAppWidget() {
                     )
                 }
             } else {
-                LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                    items(lessons) { lesson ->
+                LazyColumn(
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .defaultWeight()
+                ) {
+                    items(lessons, itemId = { it.id }) { lesson ->
                         val isActive = !now.isBefore(lesson.startTime) && now.isBefore(lesson.endTime)
-                        Row(
-                            modifier = GlanceModifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .background(
-                                    if (isActive) GlanceTheme.colors.primaryContainer
-                                    else GlanceTheme.colors.surfaceVariant
-                                )
-                                .cornerRadius(12.dp)
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
+                        Column(modifier = GlanceModifier.fillMaxWidth()) {
+                            Row(
                                 modifier = GlanceModifier
-                                    .width(4.dp)
-                                    .height(28.dp)
-                                    .background(ColorProvider(Color(lesson.color.accentHex)))
-                                    .cornerRadius(2.dp)
-                            ) {}
-                            Spacer(modifier = GlanceModifier.width(8.dp))
-                            Column(modifier = GlanceModifier.defaultWeight()) {
-                                Text(
-                                    text = lesson.subject,
-                                    maxLines = 1,
-                                    style = TextStyle(
-                                        color = GlanceTheme.colors.onSurface,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium
+                                    .fillMaxWidth()
+                                    .background(
+                                        if (isActive) GlanceTheme.colors.primaryContainer
+                                        else GlanceTheme.colors.surfaceVariant
                                     )
-                                )
-                                Text(
-                                    text = "${lesson.startTime.format(timeFmt)}–${lesson.endTime.format(timeFmt)} · ${lesson.room}",
-                                    maxLines = 1,
-                                    style = TextStyle(
-                                        color = GlanceTheme.colors.onSurfaceVariant,
-                                        fontSize = 11.sp
+                                    .cornerRadius(14.dp)
+                                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = GlanceModifier
+                                        .width(4.dp)
+                                        .height(30.dp)
+                                        .background(ColorProvider(Color(lesson.color.accentHex)))
+                                        .cornerRadius(2.dp)
+                                ) {}
+                                Spacer(modifier = GlanceModifier.width(10.dp))
+                                Column(modifier = GlanceModifier.defaultWeight()) {
+                                    Text(
+                                        text = lesson.subject,
+                                        maxLines = 1,
+                                        style = TextStyle(
+                                            color = GlanceTheme.colors.onSurface,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     )
-                                )
+                                    Spacer(modifier = GlanceModifier.height(2.dp))
+                                    Text(
+                                        text = buildString {
+                                            append("${lesson.startTime.format(timeFmt)}–${lesson.endTime.format(timeFmt)}")
+                                            if (lesson.room.isNotBlank()) {
+                                                append(" · ${lesson.room}")
+                                            }
+                                        },
+                                        maxLines = 1,
+                                        style = TextStyle(
+                                            color = GlanceTheme.colors.onSurfaceVariant,
+                                            fontSize = 11.sp
+                                        )
+                                    )
+                                }
                             }
+                            Spacer(modifier = GlanceModifier.height(8.dp))
                         }
                     }
                 }

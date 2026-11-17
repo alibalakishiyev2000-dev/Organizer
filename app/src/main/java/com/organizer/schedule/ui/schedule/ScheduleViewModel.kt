@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
@@ -63,6 +65,15 @@ class ScheduleViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { repository.ensureSeeded() }
         }
+        // Синхронизируем выбранную вкладку недели при изменении режима чётности в настройках
+        viewModelScope.launch {
+            repository.observePreferences()
+                .map { it.weekParityMode }
+                .distinctUntilChanged()
+                .collect { mode ->
+                    selectedEvenWeek.value = getLessonsForDateUseCase.isEvenWeek(LocalDate.now(), mode)
+                }
+        }
         // Перепланируем уведомления при любом изменении расписания или настроек
         viewModelScope.launch {
             combine(
@@ -74,7 +85,8 @@ class ScheduleViewModel @Inject constructor(
                         alarmScheduler.rescheduleUpcoming(
                             lessons = lessons,
                             enabled = prefs.notificationsEnabled,
-                            minutesBefore = prefs.notificationMinutesBefore
+                            minutesBefore = prefs.notificationMinutesBefore,
+                            weekParityMode = prefs.weekParityMode
                         )
                     }
                 }
@@ -118,7 +130,7 @@ class ScheduleViewModel @Inject constructor(
             getLessonsForDateUseCase(filtered, date, evenWeekOverride = viewingEvenWeek)
         }
 
-        val currentWeekEven = getLessonsForDateUseCase.isEvenWeek(today)
+        val currentWeekEven = getLessonsForDateUseCase.isEvenWeek(today, prefs.weekParityMode)
         val todayUnfilteredLessons = getLessonsForDateUseCase(allLessons, today, currentWeekEven)
         val status = getCurrentLessonStatusUseCase(todayUnfilteredLessons, now)
 

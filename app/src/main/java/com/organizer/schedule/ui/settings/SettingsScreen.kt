@@ -55,12 +55,16 @@ import androidx.compose.ui.unit.dp
 import com.organizer.schedule.domain.model.AppThemeMode
 import com.organizer.schedule.domain.model.ScheduleImportResult
 import com.organizer.schedule.domain.model.UserPreferences
+import com.organizer.schedule.domain.model.WeekParityMode
 import com.organizer.schedule.domain.usecase.ParsedScheduleBackup
 import com.organizer.schedule.notification.NotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.temporal.WeekFields
+import java.util.Locale
 import kotlin.math.roundToInt
 
 private const val MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024
@@ -77,6 +81,7 @@ fun SettingsScreen(
     onHighRefreshRateChange: (Boolean) -> Unit,
     onNotificationSettingsChange: (Boolean, Int) -> Unit,
     onFirstDayOfWeekChange: (DayOfWeek) -> Unit,
+    onWeekParityModeChange: (WeekParityMode) -> Unit,
     onGenerateIcsContent: suspend () -> String,
     onGenerateJsonBackup: suspend () -> String,
     onGenerateBaseJsonBackup: suspend () -> String,
@@ -190,7 +195,7 @@ fun SettingsScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 128.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
@@ -399,6 +404,44 @@ fun SettingsScreen(
                             onClick = { onFirstDayOfWeekChange(DayOfWeek.SUNDAY) },
                             modifier = Modifier.weight(1f)
                         )
+                    }
+
+                    val currentCalendarWeek = remember {
+                        LocalDate.now().get(WeekFields.of(Locale("ru")).weekOfWeekBasedYear())
+                    }
+                    val autoEven = currentCalendarWeek % 2 == 0
+                    val parityHint = when (preferences.weekParityMode) {
+                        WeekParityMode.AUTO ->
+                            "Автоматически по номеру недели в году ($currentCalendarWeek-я): сейчас ${if (autoEven) "Верхняя" else "Нижняя"}"
+                        WeekParityMode.EVEN ->
+                            "Задано вручную: текущая неделя — Верхняя"
+                        WeekParityMode.ODD ->
+                            "Задано вручную: текущая неделя — Нижняя"
+                    }
+
+                    Text(
+                        "Текущая неделя",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    Text(
+                        parityHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        WeekParityMode.entries.forEach { mode ->
+                            SelectableSettingPill(
+                                label = mode.title,
+                                selected = preferences.weekParityMode == mode,
+                                onClick = { onWeekParityModeChange(mode) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
             }

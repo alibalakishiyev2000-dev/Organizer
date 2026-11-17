@@ -192,7 +192,7 @@ fun ScheduleScreen(
                     start = 16.dp,
                     end = 16.dp,
                     top = 8.dp,
-                    bottom = 96.dp
+                    bottom = 136.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {

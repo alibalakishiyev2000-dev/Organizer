@@ -6,6 +6,7 @@ import type {
   RecurrenceType,
   SubjectColorId,
   SubjectColorPalette,
+  WeekParityMode,
 } from '../types/organizer';
 
 export const SUBJECT_COLORS: Record<SubjectColorId, SubjectColorPalette> = {
@@ -179,6 +180,32 @@ export function formatDurationRu(minutes: number): string {
   if (h > 0 && m > 0) return `${h} ч ${m} мин`;
   if (h > 0) return `${h} ч`;
   return `${m} мин`;
+}
+
+export function getIsoWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+export function resolveIsEvenWeek(
+  date: Date,
+  mode: WeekParityMode = 'AUTO',
+  referenceDate: Date = new Date()
+): boolean {
+  if (mode === 'AUTO') {
+    return getIsoWeekNumber(date) % 2 === 0;
+  }
+  const baseEven = mode === 'EVEN';
+  const mondayStart = (d: Date) => {
+    const iso = getJsDayToIso(d);
+    const utc = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() - (iso - 1));
+    return utc;
+  };
+  const weekDiff = Math.round((mondayStart(date) - mondayStart(referenceDate)) / (7 * 86400000));
+  return Math.abs(weekDiff) % 2 === 0 ? baseEven : !baseEven;
 }
 
 export function buildWeekDates(today: Date, firstDayOfWeek: 1 | 7): Date[] {

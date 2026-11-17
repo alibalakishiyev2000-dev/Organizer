@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.organizer.schedule.domain.model.AppThemeMode
 import com.organizer.schedule.domain.model.ScheduleImportResult
 import com.organizer.schedule.domain.model.UserPreferences
+import com.organizer.schedule.domain.model.WeekParityMode
 import com.organizer.schedule.domain.repository.ScheduleRepository
 import com.organizer.schedule.domain.usecase.ExportScheduleToIcsUseCase
 import com.organizer.schedule.domain.usecase.ParsedScheduleBackup
@@ -61,10 +62,18 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { repository.updateFirstDayOfWeek(day) }
     }
 
+    fun setWeekParityMode(mode: WeekParityMode) {
+        viewModelScope.launch { repository.updateWeekParityMode(mode) }
+    }
+
     suspend fun buildScheduleIcsContent(): String {
         val lessons = repository.observeAllLessons().first()
+        val prefs = repository.observePreferences().first()
         return withContext(Dispatchers.Default) {
-            exportScheduleToIcsUseCase(lessons)
+            exportScheduleToIcsUseCase(
+                lessons = lessons,
+                weekParityMode = prefs.weekParityMode
+            )
         }
     }
 
@@ -81,10 +90,12 @@ class SettingsViewModel @Inject constructor(
         scheduleBackupUseCase.exportToJson(baseLessons, baseHomework)
     }
 
-    suspend fun parseScheduleBackup(rawContent: String): ParsedScheduleBackup =
-        withContext(Dispatchers.Default) {
-            scheduleBackupUseCase.parseBackupFile(rawContent)
+    suspend fun parseScheduleBackup(rawContent: String): ParsedScheduleBackup {
+        val prefs = repository.observePreferences().first()
+        return withContext(Dispatchers.Default) {
+            scheduleBackupUseCase.parseBackupFile(rawContent, prefs.weekParityMode)
         }
+    }
 
     suspend fun importParsedSchedule(
         parsed: ParsedScheduleBackup,

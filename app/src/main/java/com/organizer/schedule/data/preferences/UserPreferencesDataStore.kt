@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.organizer.schedule.domain.model.AppThemeMode
 import com.organizer.schedule.domain.model.UserPreferences
+import com.organizer.schedule.domain.model.WeekParityMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -34,11 +35,13 @@ class UserPreferencesDataStore @Inject constructor(
         val NOTIFICATION_ENABLED = booleanPreferencesKey("notification_enabled")
         val NOTIFICATION_MINUTES = intPreferencesKey("notification_minutes")
         val FIRST_DAY_OF_WEEK = intPreferencesKey("first_day_of_week")
+        val WEEK_PARITY_MODE = stringPreferencesKey("week_parity_mode")
     }
 
     val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
         val themeName = prefs[Keys.THEME_MODE] ?: AppThemeMode.SYSTEM.name
         val firstDayValue = prefs[Keys.FIRST_DAY_OF_WEEK] ?: DayOfWeek.MONDAY.value
+        val weekParityName = prefs[Keys.WEEK_PARITY_MODE] ?: WeekParityMode.AUTO.name
         UserPreferences(
             themeMode = runCatching { AppThemeMode.valueOf(themeName) }
                 .getOrDefault(AppThemeMode.SYSTEM),
@@ -47,7 +50,9 @@ class UserPreferencesDataStore @Inject constructor(
             highRefreshRate = prefs[Keys.HIGH_REFRESH_RATE] ?: true,
             notificationsEnabled = prefs[Keys.NOTIFICATION_ENABLED] ?: true,
             notificationMinutesBefore = prefs[Keys.NOTIFICATION_MINUTES] ?: 15,
-            firstDayOfWeek = DayOfWeek.of(firstDayValue)
+            firstDayOfWeek = DayOfWeek.of(firstDayValue),
+            weekParityMode = runCatching { WeekParityMode.valueOf(weekParityName) }
+                .getOrDefault(WeekParityMode.AUTO)
         )
     }
 
@@ -76,5 +81,9 @@ class UserPreferencesDataStore @Inject constructor(
 
     suspend fun setFirstDayOfWeek(day: DayOfWeek) {
         context.dataStore.edit { it[Keys.FIRST_DAY_OF_WEEK] = day.value }
+    }
+
+    suspend fun setWeekParityMode(mode: WeekParityMode) {
+        context.dataStore.edit { it[Keys.WEEK_PARITY_MODE] = mode.name }
     }
 }
